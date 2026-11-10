@@ -2,6 +2,8 @@
 
 Discussions and posts gated to each member's progress through a book, show or game, for Flarum 2.
 
+![Discussions further along than you, blurred](screenshots/01-index.png)
+
 Members say where they're up to ("I'm at S2E3"). Anything further along is blurred in the discussion list, the thread and search results, with a **Spoiler for S2E5 · Tap to reveal** control. Revealing works one item at a time and is remembered. The hidden words never leave the server: they aren't blurred text, they were never sent.
 
 ## How it works
@@ -12,6 +14,10 @@ Members say where they're up to ("I'm at S2E3"). Anything further along is blurr
 - **Replies are stamped** with their author's place inside a marked discussion, so a reply from someone further along is blurred for people behind. Authors can choose another place, or "nothing past" the discussion's own, from the composer.
 - **Guests** see every marked discussion blurred. **Members who haven't said** where they are see what the admin chooses (blurred by default).
 - Authors always see their own posts.
+
+![A thread: what you've reached is open, what you haven't is blurred](screenshots/03-thread.png)
+
+![Where are you in Harbor Lights?](screenshots/06-progress.png)
 
 ## Works from other extensions (all optional)
 
