@@ -530,6 +530,10 @@ final class Redactor
     {
         $attributes = $this->strip($resource['attributes'] ?? [], self::DISCUSSION_KEEP);
         $attributes['title'] = $this->placeholder($shield);
+        // Renaming starts from the title shown, the placeholder: it would replace the real one. Reveal first.
+        if (array_key_exists('canRename', $attributes)) {
+            $attributes['canRename'] = false;
+        }
         // Core's slug is "id-words"; the words become the position.
         $attributes['slug'] = $resource['id'].'-'.Marks::slugFor($shield['work'], (int) $shield['position'], $shield['label']);
         $attributes['spoilerShield'] = $shield;
@@ -561,6 +565,10 @@ final class Redactor
         }
         if ($shield) {
             $attributes['spoilerShield'] = $shield;
+        }
+        // Editing starts from the words shown, none: saving would wipe the post. Reveal first.
+        if (array_key_exists('canEdit', $attributes)) {
+            $attributes['canEdit'] = false;
         }
 
         $resource['attributes'] = $attributes;

@@ -180,6 +180,17 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function a_hidden_item_cannot_be_edited_or_renamed_until_revealed(): void
+    {
+        // The admin is behind too (no place set): editing would start from nothing.
+        $this->assertFalse($this->api('GET', '/api/posts/3', 1)[1]['data']['attributes']['canEdit']);
+        $this->assertFalse($this->api('GET', '/api/discussions/1', 1)[1]['data']['attributes']['canRename']);
+
+        $this->api('POST', '/api/spoiler-shield/reveals', 1, ['type' => 'posts', 'id' => 3]);
+        $this->assertTrue($this->api('GET', '/api/posts/3', 1)[1]['data']['attributes']['canEdit']);
+    }
+
+    #[Test]
     public function the_author_always_sees_their_own(): void
     {
         $this->app();
