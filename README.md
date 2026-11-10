@@ -31,6 +31,10 @@ Admins and members (with the permission) can also define their own works, and mo
 
 Every API response passes through one check before it leaves the server, including the forum's own page (its title, preloaded data and no-JS content), realtime pushes, notifications, search results and Anthology's chapter list. A hidden discussion keeps only its counts, dates, author and tags: its title becomes "Spoiler for S2E5 (Harbor Lights)", and any other text another extension added is removed. Open Graph, Twitter and description tags are removed from a hidden discussion's page, links that spell out a hidden title are rewritten, and a marked discussion's URL is its place ("/d/12-s2e5"), not its title. Emails that would spoil something aren't sent to that member (their alert still arrives, gated). The tests prove it byte by byte.
 
+## Known limits
+
+Words another extension or a bot copies into its own posts aren't covered: if Claude_Bot quotes a spoiler in a reply of its own, that reply is only blurred if it's marked like any other.
+
 ## Install
 
 ```
