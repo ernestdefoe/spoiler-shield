@@ -331,6 +331,49 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function a_reply_with_its_own_place_cannot_also_quote_another_works_spoiler(): void
+    {
+        // A second work, with a discussion at its chapter 2.
+        $this->app();
+        $now = Carbon::now()->subHour();
+        $db = $this->database();
+        $db->table('spoiler_works')->insert(['id' => 2, 'title' => 'Other Book', 'kind' => 'book', 'steps' => json_encode(['One', 'Two']), 'created_at' => $now, 'updated_at' => $now]);
+        $db->table('discussions')->insert(['id' => 6, 'title' => 'Other book ch 2', 'slug' => 'two', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'first_post_id' => 6, 'spoiler_work' => 'w:2', 'spoiler_position' => 2, 'spoiler_label' => 'Two']);
+        $db->table('posts')->insert(['id' => 6, 'discussion_id' => 6, 'number' => 1, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>The other twist</p></t>']);
+
+        // Ash (finished The Long Road) replies in its chapter 1 thread, so her reply goes to "Finished"; quoting the other book is refused.
+        $reply = fn (string $text) => $this->api('POST', '/api/posts', 4, ['data' => ['type' => 'posts', 'attributes' => ['content' => $text], 'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => '2']]]]]);
+        $this->assertSame(422, $reply('@"ash"#p6 and here is the ending of The Long Road too')[0]);
+        $this->assertSame(0, Post::query()->where('discussion_id', 2)->where('content', 'like', '%ending of The Long Road%')->count());
+    }
+
+    #[Test]
+    public function an_edit_raises_the_stamp_to_the_authors_place_now_never_lower(): void
+    {
+        // Bea (at chapter 2) replies in the chapter 1 thread: stamped at chapter 2.
+        $this->api('POST', '/api/posts', 3, ['data' => ['type' => 'posts', 'attributes' => ['content' => 'Loving it so far'], 'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => '2']]]]]);
+        $post = Post::query()->where('discussion_id', 2)->where('user_id', 3)->where('type', 'comment')->orderByDesc('id')->first();
+        $this->assertSame(2, (int) $post->spoiler_position);
+
+        $edit = function (string $text) use ($post) {
+            // Flood control: Flarum won't take a new edit seconds after the last post.
+            $this->database()->table('posts')->where('user_id', 3)->update(['created_at' => Carbon::now()->subHour(), 'edited_at' => null]);
+
+            return $this->api('PATCH', '/api/posts/'.$post->id, 3, ['data' => ['type' => 'posts', 'id' => (string) $post->id, 'attributes' => ['content' => $text]]]);
+        };
+
+        // She reads on to chapter 4 and adds to her reply: it now goes up to chapter 4.
+        $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'w:1', 'position' => 4]);
+        $edit('Loving it so far. EDIT: chapter four, wow');
+        $this->assertSame(4, (int) $post->fresh()->spoiler_position);
+
+        // Setting her place back doesn't lower it.
+        $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'w:1', 'position' => 2]);
+        $edit('Loving it so far. EDIT: chapter four, wow. Typo fixed');
+        $this->assertSame(4, (int) $post->fresh()->spoiler_position);
+    }
+
+    #[Test]
     public function unmarking_a_discussion_keeps_its_stamped_replies_hidden(): void
     {
         $this->api('PATCH', '/api/discussions/2', 1, ['data' => ['type' => 'discussions', 'id' => '2', 'attributes' => ['spoilerShield' => null]]]);

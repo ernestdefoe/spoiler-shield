@@ -178,24 +178,35 @@ final class MarkWriter
             $stampWork = $work;
         }
 
+        // An edit can add what its author has seen since: the stamp rises to their place now (never lower).
+        if (! $first && $post->exists && $post->isDirty('content') && $work !== null && $discussion->spoiler_position !== null
+            && ($stampWork === null || $stampWork === $work) && $post->user && $this->settings->get('ernestdefoe-spoiler-shield.stamp_replies')) {
+            $now = $this->positions->read($post->user, $work);
+            if ($now !== null && ($position === null || $now > $position)) {
+                $position = $now;
+                $stampWork = $work;
+            }
+        }
+
         // Nothing past the discussion's own place: no mark needed.
         if ($stampWork === $work && $position !== null && $position <= $floor) {
             $position = null;
         }
 
         // A quote or a mention republishes what it points at: never below the furthest of those,
-        // wherever it came from (another discussion, another work). On edits too.
+        // wherever it came from. One post carries one work's place, so a reply that already goes
+        // somewhere in one work can't also quote a spoiler from another: refused, never overwritten.
         if (! $post->exists || $post->isDirty('content')) {
             foreach ($this->quoted($post) as [$quotedWork, $quotedPosition]) {
-                if ($quotedWork === ($stampWork ?? $work)) {
-                    if ($position === null || $quotedPosition > $position) {
-                        $position = $quotedWork === $work && $quotedPosition <= $floor ? $position : $quotedPosition;
+                if ($position === null) {
+                    if ($quotedWork !== $work || $quotedPosition > $floor) {
+                        $position = $quotedPosition;
                         $stampWork = $quotedWork;
                     }
-                } elseif ($position === null || $stampWork === null || $stampWork === $work) {
-                    // Another work's spoiler, quoted here: that one decides (it's the words on the page).
-                    $position = $quotedPosition;
-                    $stampWork = $quotedWork;
+                } elseif ($quotedWork === $stampWork) {
+                    $position = max($position, $quotedPosition);
+                } else {
+                    $this->invalid('quote_other_work');
                 }
             }
         }

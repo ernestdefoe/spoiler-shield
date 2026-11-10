@@ -14,6 +14,7 @@ ernestdefoe-spoiler-shield:
   api:
     invalid_work: "That book, show or game doesn't exist."
     invalid_position: "That spot isn't on the list for this book, show or game."
+    invalid_quote_other_work: "This reply already has spoilers for one book, show or game, so it can't also quote spoilers from another. Post that quote in a reply of its own."
 
   forum:
     veil:
