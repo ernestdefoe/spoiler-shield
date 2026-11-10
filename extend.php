@@ -13,7 +13,7 @@
  * passes through RedactApi (Flarum's internal API client runs it too, so the
  * page's preload, title and no-JS content, and realtime pushes, are covered),
  * ScrubDocument cleans the page's head and links after SEO extensions, and
- * the email driver leaves out recipients an email would spoil. Hidden words
+ * the email driver (wrapped in Provider::boot) leaves out recipients an email would spoil. Hidden words
  * never leave the server unless the member reveals them.
  */
 
@@ -21,7 +21,6 @@ use ErnestDefoe\SpoilerShield\Api;
 use ErnestDefoe\SpoilerShield\Http\RedactApi;
 use ErnestDefoe\SpoilerShield\Http\ScrubDocument;
 use ErnestDefoe\SpoilerShield\MarkWriter;
-use ErnestDefoe\SpoilerShield\Notification\GatedEmailDriver;
 use ErnestDefoe\SpoilerShield\Provider;
 use Flarum\Api\Context;
 use Flarum\Api\Resource\DiscussionResource;
@@ -84,9 +83,6 @@ return [
         ->whenExtensionEnabled('flarum-tags', fn () => [
             (new Extend\Event())->listen(DiscussionWasTagged::class, fn (DiscussionWasTagged $event) => resolve(MarkWriter::class)->retagged($event->discussion)),
         ]),
-
-    // Core's email driver, minus the recipients an email would spoil.
-    (new Extend\Notification())->driver('email', GatedEmailDriver::class),
 
     // String literals, not class constants: extend.php runs at boot, and a class
     // lookup here fatals every request on a worker whose autoload map is stale mid-install.

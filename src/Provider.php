@@ -4,7 +4,9 @@ namespace ErnestDefoe\SpoilerShield;
 
 use ErnestDefoe\SpoilerShield\Integration\AnthologyChapters;
 use Flarum\Discussion\Discussion;
+use ErnestDefoe\SpoilerShield\Notification\GatedEmailDriver;
 use Flarum\Foundation\AbstractServiceProvider;
+use Flarum\Notification\NotificationSyncer;
 
 class Provider extends AbstractServiceProvider
 {
@@ -16,6 +18,18 @@ class Provider extends AbstractServiceProvider
 
     public function boot(): void
     {
+        // Wrap the email driver that's there, whoever registered it: replacing it would undo
+        // another extension's (Courier's reply-by-email). Core's notification drivers are
+        // set when its provider boots, before any extension's.
+        $drivers = NotificationSyncer::getNotificationDrivers();
+        if (isset($drivers['email']) && ! $drivers['email'] instanceof GatedEmailDriver) {
+            NotificationSyncer::addNotificationDriver('email', new GatedEmailDriver(
+                $drivers['email'],
+                $this->container->make(Gate::class),
+                $this->container->make(MarkStore::class),
+            ));
+        }
+
         Discussion::saving(fn (Discussion $discussion) => $this->container->make(MarkWriter::class)->discussionModelSaving($discussion));
 
         // Anthology may be absent: only then are its classes missing, and nothing of it ever saves.

@@ -356,4 +356,37 @@ class GateTest extends TestCase
         $this->assertStringNotContainsString('betrayal of the guild', $raw);
         $this->assertStringContainsString('content="Spoiler for Two (&lt;img src=x onerror=alert(1)&gt;)"', $raw);
     }
+
+    #[Test]
+    public function another_extensions_email_driver_is_wrapped_not_replaced(): void
+    {
+        // Like Courier: an extension that puts its own email driver in core's place.
+        RecordingEmailDriver::$sent = [];
+        $this->extend((new Extend\Notification())->driver('email', RecordingEmailDriver::class));
+        $this->app();
+
+        $this->app()->getContainer()->make(NotificationSyncer::class)->sync(
+            new \Flarum\Mentions\Notification\PostMentionedBlueprint(Post::query()->find(2), Post::query()->find(3)),
+            [User::query()->find(3), User::query()->find(4)]
+        );
+
+        $this->assertSame([4], RecordingEmailDriver::$sent, 'its driver still sends, to Ash only');
+    }
+}
+
+class RecordingEmailDriver implements \Flarum\Notification\Driver\NotificationDriverInterface
+{
+    /** @var int[] */
+    public static array $sent = [];
+
+    public function send(\Flarum\Notification\Blueprint\BlueprintInterface $blueprint, array $users): void
+    {
+        foreach ($users as $user) {
+            self::$sent[] = (int) $user->id;
+        }
+    }
+
+    public function registerType(string $blueprintClass, array $driversEnabledByDefault): void
+    {
+    }
 }

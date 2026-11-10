@@ -6,13 +6,12 @@ use ErnestDefoe\SpoilerShield\Gate;
 use ErnestDefoe\SpoilerShield\MarkStore;
 use Flarum\Discussion\Discussion;
 use Flarum\Notification\Blueprint\BlueprintInterface;
-use Flarum\Notification\Driver\EmailNotificationDriver;
 use Flarum\Notification\Driver\NotificationDriverInterface;
 use Flarum\Post\Post;
-use Illuminate\Contracts\Container\Container;
 
 /**
- * Core's email driver, minus the people the email would spoil. An email
+ * Whatever email driver the forum runs (core's, or one another extension put
+ * in its place, like Courier's), minus the people the email would spoil. An email
  * prints the discussion's title and the post's words, and can't be blurred,
  * so a member who isn't that far along doesn't get it (their alert in the
  * forum still arrives, gated like everything else there).
@@ -22,14 +21,11 @@ use Illuminate\Contracts\Container\Container;
  */
 class GatedEmailDriver implements NotificationDriverInterface
 {
-    private EmailNotificationDriver $email;
-
     public function __construct(
-        Container $container,
+        private readonly NotificationDriverInterface $email,
         private readonly Gate $gate,
         private readonly MarkStore $store,
     ) {
-        $this->email = new EmailNotificationDriver($container);
     }
 
     public function send(BlueprintInterface $blueprint, array $users): void
