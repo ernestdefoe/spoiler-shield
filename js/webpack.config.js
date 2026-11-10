@@ -28,6 +28,7 @@ module.exports = (...args) => {
   if (typeof base === 'function') base = base(...args);
 
   base.optimization = { ...base.optimization, chunkIds: false };
+  base.output = { ...base.output, chunkLoadingGlobal: 'webpackChunk_ernestdefoe_spoiler_shield' };
   base.plugins = [...(base.plugins || []), new NamespacedChunkIds()];
 
   return base;
