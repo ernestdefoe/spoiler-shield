@@ -30,4 +30,19 @@ final class Integrations
     {
         return class_exists(\Flarum\Tags\Tag::class) && $this->extensions->isEnabled('flarum-tags');
     }
+
+    /**
+     * Whether a work's source is here: a Marquee or Anthology work whose
+     * extension was switched off counts as unmarked (nothing to set a place
+     * in, so nothing may stay blurred for good).
+     */
+    public function live(?string $work): bool
+    {
+        return match (true) {
+            $work === null => false,
+            str_starts_with($work, 'mq:') => $this->marquee(),
+            str_starts_with($work, 'an:') => $this->anthology(),
+            default => true,
+        };
+    }
 }

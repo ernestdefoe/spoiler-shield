@@ -282,6 +282,26 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function marks_from_an_extension_that_is_switched_off_count_as_unmarked(): void
+    {
+        // Marquee and Anthology aren't enabled here: their marks are leftovers.
+        $this->app();
+        $now = Carbon::now()->subHour();
+        $this->database()->table('discussions')->insert([
+            ['id' => 7, 'title' => 'Dragon episode chat', 'slug' => 's2e5', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'mq:1', 'spoiler_position' => 2005],
+            ['id' => 8, 'title' => 'Chapter nine chat', 'slug' => 'chapter-9', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'an:1', 'spoiler_position' => 9],
+        ]);
+
+        $doc = $this->api('GET', '/api/discussions', null)[1];
+        foreach (['7' => 'Dragon episode chat', '8' => 'Chapter nine chat'] as $id => $title) {
+            $item = collect($doc['data'])->firstWhere('id', $id);
+            $this->assertSame($title, $item['attributes']['title']);
+            $this->assertNull($item['attributes']['spoilerShield']);
+        }
+        $this->assertContains('7', array_column($this->api('GET', '/api/discussions', null, [], ['filter' => ['q' => 'Dragon']])[1]['data'], 'id'));
+    }
+
+    #[Test]
     public function realtimes_public_push_carries_no_text_of_marked_items(): void
     {
         $generator = $this->app()->getContainer()->make(\Flarum\Realtime\Push\Payload\Generator::class);

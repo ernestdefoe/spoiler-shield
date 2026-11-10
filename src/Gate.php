@@ -27,6 +27,7 @@ final class Gate
         private readonly ConnectionInterface $db,
         private readonly Positions $positions,
         private readonly SettingsRepositoryInterface $settings,
+        private readonly Integrations $integrations,
     ) {
     }
 
@@ -111,7 +112,7 @@ final class Gate
             ? Marks::FINISHED : -1;
 
         foreach ($discussions as $id => $d) {
-            if ($d['work'] === null || $d['position'] === null) {
+            if ($d['position'] === null || ! $this->integrations->live($d['work'])) {
                 continue;
             }
 
@@ -128,7 +129,7 @@ final class Gate
             // A stamp carries its own work; an older one, or a post never stamped, goes with its discussion's.
             $work = ($p['work'] ?? null) ?? ($d['work'] ?? null);
 
-            if ($work === null) {
+            if (! $this->integrations->live($work)) {
                 continue;
             }
 

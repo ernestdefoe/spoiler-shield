@@ -38,6 +38,7 @@ final class Redactor
 
     public function __construct(
         private readonly MarkStore $store,
+        private readonly Integrations $integrations,
         private readonly Gate $gate,
         private readonly Works $works,
         private readonly Labels $labels,
@@ -377,6 +378,18 @@ final class Redactor
             }
         }
         $posts += $this->store->posts($ends);
+
+        // A work whose extension is switched off counts as unmarked.
+        foreach ($discussions as $id => $d) {
+            if ($d['work'] !== null && ! $this->integrations->live($d['work'])) {
+                $discussions[$id]['work'] = null;
+            }
+        }
+        foreach ($posts as $id => $p) {
+            if (($p['work'] ?? null) !== null && ! $this->integrations->live($p['work'])) {
+                $posts[$id]['work'] = null;
+            }
+        }
 
         // A post found nowhere (deleted under us) is treated like its discussion.
         foreach ($needP as $id => $_) {

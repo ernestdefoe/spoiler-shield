@@ -33,6 +33,7 @@ final class HiddenFromSearch
         private readonly ConnectionInterface $db,
         private readonly Positions $positions,
         private readonly SettingsRepositoryInterface $settings,
+        private readonly \ErnestDefoe\SpoilerShield\Integrations $integrations,
     ) {
     }
 
@@ -139,8 +140,13 @@ final class HiddenFromSearch
         )));
         $positions = $this->positions->for($actor, $works);
 
-        $open = $limits = [];
+        // A work whose extension is switched off counts as unmarked: open to everyone.
+        $open = array_values(array_filter($works, fn ($w) => ! $this->integrations->live($w)));
+        $limits = [];
         foreach ($positions as $work => $p) {
+            if (in_array($work, $open, true)) {
+                continue;
+            }
             if ($p['read'] === Marks::FINISHED) {
                 $open[] = $work;
             } else {

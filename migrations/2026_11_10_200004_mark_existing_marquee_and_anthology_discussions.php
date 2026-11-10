@@ -11,8 +11,16 @@ use Illuminate\Database\Schema\Builder;
 return [
     'up' => function (Builder $schema) {
         $db = $schema->getConnection();
+        // Tables outlive a disabled extension: only an enabled one's links count.
+        $enabled = function (string $id): bool {
+            try {
+                return resolve(\Flarum\Extension\ExtensionManager::class)->isEnabled($id);
+            } catch (\Throwable) {
+                return false;
+            }
+        };
 
-        if ($schema->hasColumn('discussions', 'marquee_media_id')) {
+        if ($enabled('ernestdefoe-marquee') && $schema->hasColumn('discussions', 'marquee_media_id')) {
             $db->table('discussions')->whereNotNull('marquee_media_id')->whereNull('spoiler_work')
                 ->orderBy('id')->select(['id', 'marquee_media_id', 'marquee_season', 'marquee_episode'])
                 ->chunk(500, function ($rows) use ($db) {
@@ -29,7 +37,7 @@ return [
                 });
         }
 
-        if ($schema->hasTable('anthology_chapters')) {
+        if ($enabled('ernestdefoe-anthology') && $schema->hasTable('anthology_chapters')) {
             $db->table('anthology_chapters')->orderBy('discussion_id')->select(['discussion_id', 'series_id', 'position'])
                 ->chunk(500, function ($rows) use ($db) {
                     foreach ($rows as $row) {
