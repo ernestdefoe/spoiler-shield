@@ -128,6 +128,125 @@ final class Redactor
         return $doc;
     }
 
+    /** Words that may sit beside a discussion's link in another extension's JSON (a widget's list). */
+    private const LINK_TEXT_KEYS = ['excerpt', 'summary', 'description', 'body', 'content', 'contentHtml', 'text', 'preview', 'snippet', 'firstPost'];
+
+    /**
+     * Any JSON, from any extension: an object that links to a discussion
+     * (`url`/`href`/`link` to /d/{id}) and names it (`title`/`name`) is a
+     * reference to that discussion. Hidden ones get the placeholder for a
+     * name, their position for a slug, and lose excerpt-like text. JSON:API
+     * discussions and posts themselves are the other method's job.
+     *
+     * @param array<string, mixed> $doc
+     * @return array<string, mixed>
+     */
+    public function redactLinks(array $doc, User $actor, ?Session $session): array
+    {
+        $ids = [];
+        $collect = function ($node) use (&$collect, &$ids) {
+            if (! is_array($node)) {
+                return;
+            }
+            if (($id = $this->linkedId($node)) !== null) {
+                $ids[$id] = true;
+            }
+            foreach ($node as $value) {
+                $collect($value);
+            }
+        };
+        $collect($doc);
+
+        if (! $ids) {
+            return $doc;
+        }
+
+        $discussions = $this->store->discussions(array_keys($ids));
+        $verdict = $this->gate->check($actor, $session, $discussions, []);
+
+        if (! $verdict->hiddenDiscussions) {
+            return $doc;
+        }
+
+        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))));
+        $replace = function ($node) use (&$replace, $verdict, $discussions, $works) {
+            if (! is_array($node)) {
+                return $node;
+            }
+            $id = $this->linkedId($node);
+            if ($id !== null && $verdict->discussionHidden($id)) {
+                $d = $discussions[$id];
+                $label = $this->labels->for((string) $d['work'], (int) $d['position'], $d['label']);
+                $slug = Marks::slugFor((string) $d['work'], (int) $d['position'], $d['label']);
+                foreach (['title', 'name'] as $key) {
+                    if (isset($node[$key]) && is_string($node[$key])) {
+                        $node[$key] = $this->placeholder(['label' => $label, 'title' => $works[$d['work']]['title'] ?? '']);
+                    }
+                }
+                foreach (['url', 'href', 'link', 'permalink'] as $key) {
+                    if (isset($node[$key]) && is_string($node[$key])) {
+                        $node[$key] = (string) preg_replace('#/d/'.$id.'(-[^/?\#"]*)?#', '/d/'.$id.'-'.$slug, $node[$key]);
+                    }
+                }
+                if (isset($node['slug']) && is_string($node['slug'])) {
+                    $node['slug'] = $id.'-'.$slug;
+                }
+                foreach (self::LINK_TEXT_KEYS as $key) {
+                    if (array_key_exists($key, $node)) {
+                        $node[$key] = null;
+                    }
+                }
+                $node['spoilerShield'] = ['hidden' => true, 'label' => $label];
+            }
+            foreach ($node as $key => $value) {
+                if (is_array($value)) {
+                    $node[$key] = $replace($value);
+                }
+            }
+
+            return $node;
+        };
+
+        $doc = $replace($doc);
+
+        // The hidden title quoted as plain text elsewhere (another discussion's excerpt of a post linking to it).
+        $titles = [];
+        foreach ($this->store->titles(array_keys($verdict->hiddenDiscussions)) as $id => $title) {
+            if (mb_strlen($title) >= 4) {
+                $d = $discussions[$id];
+                $titles[$title] = $this->placeholder(['label' => $this->labels->for((string) $d['work'], (int) $d['position'], $d['label']), 'title' => $works[$d['work']]['title'] ?? '']);
+            }
+        }
+        if ($titles) {
+            array_walk_recursive($doc, function (&$value) use ($titles) {
+                if (is_string($value)) {
+                    $value = strtr($value, $titles);
+                }
+            });
+        }
+
+        return $doc;
+    }
+
+    /**
+     * The discussion an object in some JSON links to and names, or null.
+     *
+     * @param array<mixed> $node
+     */
+    private function linkedId(array $node): ?int
+    {
+        if (in_array($node['type'] ?? null, ['discussions', 'posts'], true) || (! isset($node['title']) && ! isset($node['name']))) {
+            return null;
+        }
+        foreach (['url', 'href', 'link', 'permalink'] as $key) {
+            if (isset($node[$key]) && is_string($node[$key]) && preg_match('#/d/(\d+)(?:[-/?\#]|$)#', $node[$key], $m)) {
+                return (int) $m[1];
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Everything marked, as if no viewer could see any of it: the fallback
      * when something goes wrong, so a failure never shows a spoiler.
@@ -158,6 +277,23 @@ final class Redactor
         if (is_array($doc['included'] ?? null)) {
             $doc['included'] = array_map($blank, $doc['included']);
         }
+        // Other extensions' lists of discussions: no names.
+        $links = function ($node) use (&$links) {
+            if (! is_array($node)) {
+                return $node;
+            }
+            if ($this->linkedId($node) !== null) {
+                foreach (['title', 'name'] as $key) {
+                    if (isset($node[$key])) {
+                        $node[$key] = '';
+                    }
+                }
+            }
+
+            return array_map($links, $node);
+        };
+        $doc = $links($doc);
+
         if (is_array($doc['data']['chapters'] ?? null)) {
             $doc['data']['chapters'] = array_map(fn ($c) => ['title' => '', 'slug' => ''] + (array) $c, $doc['data']['chapters']);
         }

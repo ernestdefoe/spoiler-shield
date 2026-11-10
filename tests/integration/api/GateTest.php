@@ -358,6 +358,25 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function another_extensions_json_listing_discussions_is_gated_too(): void
+    {
+        // Like Page Builder's widgets: plain JSON from the database, links and titles.
+        $this->extend((new Extend\Routes('api'))->get('/test-widgets', 'test.widgets', WidgetController::class));
+
+        foreach ([3, null] as $as) {
+            [$status, $doc, $raw] = $this->api('GET', '/api/test-widgets', $as);
+            $this->assertSame(200, $status);
+            $this->assertStringNotContainsString(self::TITLE, $raw);
+            $this->assertStringNotContainsString(self::BODY, $raw);
+            $items = collect($doc['widgets'][0]['items'])->keyBy('id');
+            $this->assertSame('http://localhost/d/1-ch-4', $items[1]['url']);
+            $this->assertSame('Book club general', $items[3]['title'], 'the rest untouched');
+        }
+
+        $this->assertStringContainsString(self::TITLE, $this->api('GET', '/api/test-widgets', 4)[2]);
+    }
+
+    #[Test]
     public function another_extensions_email_driver_is_wrapped_not_replaced(): void
     {
         // Like Courier: an extension that puts its own email driver in core's place.
@@ -371,6 +390,18 @@ class GateTest extends TestCase
         );
 
         $this->assertSame([4], RecordingEmailDriver::$sent, 'its driver still sends, to Ash only');
+    }
+}
+
+class WidgetController implements \Psr\Http\Server\RequestHandlerInterface
+{
+    public function handle(ServerRequestInterface $request): \Psr\Http\Message\ResponseInterface
+    {
+        $items = Discussion::query()->orderBy('id')->get()->map(fn ($d) => [
+            'id' => $d->id, 'title' => $d->title, 'url' => 'http://localhost/d/'.$d->id.'-'.$d->slug, 'excerpt' => $d->firstPost?->content,
+        ]);
+
+        return new \Laminas\Diactoros\Response\JsonResponse(['widgets' => [['type' => 'recent', 'items' => $items->all()]]]);
     }
 }
 

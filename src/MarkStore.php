@@ -56,4 +56,13 @@ final class MarkStore
 
         return $out;
     }
+
+    /**
+     * @param int[] $ids
+     * @return array<int, string>
+     */
+    public function titles(array $ids): array
+    {
+        return $ids ? $this->db->table('discussions')->whereIn('id', $ids)->pluck('title', 'id')->map(fn ($t) => (string) $t)->all() : [];
+    }
 }
