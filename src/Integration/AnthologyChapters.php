@@ -6,6 +6,7 @@ use Ernestdefoe\Anthology\Chapter;
 use Ernestdefoe\Anthology\Series;
 use ErnestDefoe\SpoilerShield\Gate;
 use ErnestDefoe\SpoilerShield\MarkStore;
+use ErnestDefoe\SpoilerShield\MarkWriter;
 use Flarum\Discussion\Discussion;
 use Flarum\Discussion\UserState;
 use Flarum\User\User;
@@ -63,7 +64,7 @@ final class AnthologyChapters
 
     public static function seriesDeleting(Series $series): void
     {
-        self::clear(Discussion::query(), 'an:'.(int) $series->id);
+        resolve(MarkWriter::class)->clearWork('an:'.(int) $series->id);
 
         // A deleted series has no chapters left to read up to: its stamps would stay blurred for good.
         resolve(\Illuminate\Database\ConnectionInterface::class)->table('posts')->where('spoiler_work', 'an:'.(int) $series->id)
@@ -73,7 +74,7 @@ final class AnthologyChapters
     /** @param \Illuminate\Database\Eloquent\Builder<Discussion> $query */
     private static function clear($query, string $work): void
     {
-        $query->where('spoiler_work', $work)->each(function (Discussion $discussion) {
+        $query->where('spoiler_work', $work)->eachById(function (Discussion $discussion) {
             $discussion->spoiler_work = $discussion->spoiler_position = $discussion->spoiler_label = null;
             $discussion->save();
         });

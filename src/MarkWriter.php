@@ -158,6 +158,29 @@ final class MarkWriter
     }
 
     /**
+     * A whole work's marks going away (its deletion, a deleted Anthology series), in constant
+     * queries however many discussions: unstamped replies first take their discussion's place
+     * (the same rule as keepRepliesGated), then the discussions are unmarked. Their slugs stay
+     * the place ("s2e5"): harmless, and no title reaches a URL.
+     */
+    public function clearWork(string $work): void
+    {
+        $g = $this->db->getQueryGrammar();
+        $discussions = $g->wrapTable('discussions');
+        $from = fn (string $column) => $this->db->raw('(select '.$g->wrap('discussions.'.$column).' from '.$discussions
+            .' where '.$g->wrap('discussions.id').' = '.$g->wrap('posts.discussion_id').')');
+
+        $this->db->table('posts')
+            ->whereNull('spoiler_position')
+            ->whereIn('discussion_id', fn ($q) => $q->select('id')->from('discussions')->where('spoiler_work', $work)->whereNotNull('spoiler_position'))
+            ->whereNotIn('id', fn ($q) => $q->select('first_post_id')->from('discussions')->where('spoiler_work', $work)->whereNotNull('first_post_id'))
+            ->update(['spoiler_work' => $work, 'spoiler_position' => $from('spoiler_position'), 'spoiler_label' => $from('spoiler_label')]);
+
+        $this->db->table('discussions')->where('spoiler_work', $work)
+            ->update(['spoiler_work' => null, 'spoiler_position' => null, 'spoiler_label' => null]);
+    }
+
+    /**
      * fof/split moves posts with one bulk UPDATE (no model events): those without a stamp of
      * their own take the original discussion's work and place, in one UPDATE.
      *

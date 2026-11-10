@@ -239,6 +239,20 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function deleting_a_work_clears_every_discussion_past_the_first_page(): void
+    {
+        $this->app();
+        $db = $this->database();
+        $now = Carbon::now()->subHour();
+        foreach (array_chunk(range(1001, 2200), 300) as $ids) {
+            $db->table('discussions')->insert(array_map(fn ($id) => ['id' => $id, 'title' => 'T'.$id, 'slug' => 'ch-2', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'w:1', 'spoiler_position' => 2, 'spoiler_label' => 'Ch 2'], $ids));
+        }
+
+        $this->assertSame(204, $this->api('DELETE', '/api/spoiler-shield/works/1', 1)[0]);
+        $this->assertSame(0, $db->table('discussions')->where('spoiler_work', 'w:1')->count());
+    }
+
+    #[Test]
     public function the_author_always_sees_their_own(): void
     {
         $this->app();
@@ -655,6 +669,9 @@ class GateTest extends TestCase
         $this->assertStringNotContainsString(self::TITLE, $this->api('GET', '/api/test-presence', 3)[2]);
         $this->assertStringNotContainsString(self::TITLE, $this->api('GET', '/api/test-presence', null)[2]);
         $this->assertStringContainsString(self::TITLE, $this->api('GET', '/api/test-presence', 4)[2]);
+
+        // And a plain list of them: { "discussions": [ { "id", "title" } ] }.
+        $this->assertStringNotContainsString(self::TITLE, $this->api('GET', '/api/test-presence', 3, [], ['list' => '1'])[2]);
     }
 
     #[Test]
@@ -724,6 +741,10 @@ class PresenceController implements \Psr\Http\Server\RequestHandlerInterface
     public function handle(ServerRequestInterface $request): \Psr\Http\Message\ResponseInterface
     {
         $d = Discussion::query()->find(1);
+
+        if ($request->getQueryParams()['list'] ?? false) {
+            return new \Laminas\Diactoros\Response\JsonResponse(['discussions' => [['id' => $d->id, 'title' => $d->title]]]);
+        }
 
         return new \Laminas\Diactoros\Response\JsonResponse(['members' => [
             ['user' => ['id' => 4, 'displayName' => 'ash'], 'activity' => ['kind' => 'discussion', 'discussion' => ['id' => $d->id, 'title' => $d->title, 'slug' => $d->slug]]],

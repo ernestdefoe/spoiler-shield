@@ -48,7 +48,7 @@ class RedactApi implements MiddlewareInterface
         $jsonApi = (bool) preg_match('/"type"\s*:\s*"(discussions|posts)"/', $body);
         // Other extensions' JSON (a widget's list of discussions) links to /d/{id}, escaped or not.
         $links = str_contains($body, '/d/') || str_contains($body, '\/d\/')
-            || (bool) preg_match('/"discussion"\s*:\s*\{|"discussionTitle"/', $body);
+            || (bool) preg_match('/"discussion"\s*:\s*\{|"discussions"\s*:\s*\[|"discussionTitle"/', $body);
 
         if (! $series && ! $jsonApi && ! $links) {
             return $response;
