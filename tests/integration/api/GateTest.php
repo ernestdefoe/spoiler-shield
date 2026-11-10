@@ -191,6 +191,24 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function when_the_check_fails_every_discussion_and_post_loses_its_words(): void
+    {
+        $redactor = $this->app()->getContainer()->make(\ErnestDefoe\SpoilerShield\Redactor::class);
+        $doc = $redactor->redactAll(['data' => [
+            ['type' => 'discussions', 'id' => '1', 'attributes' => ['title' => self::TITLE, 'commentCount' => 3, 'themeExcerpt' => self::BODY, 'ssMark' => ['w:1', 4, null, 4]]],
+        ], 'included' => [
+            ['type' => 'posts', 'id' => '3', 'attributes' => ['contentHtml' => '<p>'.self::REPLY.'</p>', 'content' => self::REPLY, 'createdAt' => '2026-11-10', 'extensionSummary' => self::REPLY]],
+        ]]);
+
+        $raw = json_encode($doc);
+        foreach ([self::TITLE, self::BODY, self::REPLY, 'ssMark'] as $gone) {
+            $this->assertStringNotContainsString($gone, $raw);
+        }
+        $this->assertSame(3, $doc['data'][0]['attributes']['commentCount']);
+        $this->assertSame('2026-11-10', $doc['included'][0]['attributes']['createdAt']);
+    }
+
+    #[Test]
     public function the_author_always_sees_their_own(): void
     {
         $this->app();

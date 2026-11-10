@@ -269,13 +269,17 @@ final class Redactor
      */
     public function redactAll(array $doc): array
     {
-        $blank = static function (array $resource): array {
+        // The same allow-list as a hidden item: numbers, booleans, permissions and dates stay.
+        $blank = function (array $resource): array {
             unset($resource['attributes']['ssMark']);
-            if (($resource['type'] ?? '') === 'discussions') {
-                $resource['attributes']['title'] = '';
+            $type = $resource['type'] ?? '';
+            if ($type === 'discussions') {
+                $resource['attributes'] = ['title' => '', 'slug' => (string) ($resource['id'] ?? '')] + $this->strip($resource['attributes'] ?? [], self::DISCUSSION_KEEP);
             }
-            if (($resource['type'] ?? '') === 'posts') {
-                $resource['attributes']['content'] = null;
+            if ($type === 'posts') {
+                $before = $resource['attributes'] ?? [];
+                $resource['attributes'] = $this->strip($before, self::POST_KEEP);
+                $resource['attributes']['content'] = is_array($before['content'] ?? null) ? array_map(fn ($v) => is_string($v) ? '' : $v, $before['content']) : null;
                 $resource['attributes']['contentHtml'] = '';
             }
 
