@@ -17,7 +17,7 @@ final class Verdict
     /** @var array<int, true> */
     public array $revealedPosts = [];
 
-    /** @var array<string, array{read: int, frontier: int}> */
+    /** @var array<string, array{read: int, frontier: int, set?: bool}> */
     public array $positions = [];
 
     public function discussionHidden(int $id): bool

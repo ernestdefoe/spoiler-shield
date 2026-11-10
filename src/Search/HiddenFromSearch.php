@@ -126,7 +126,7 @@ final class HiddenFromSearch
      * Once per request: every work with a marked discussion, the searcher's
      * place in each, and what they revealed.
      *
-     * @return array{open: string[], limits: array<string, array{read: int, frontier: int}>, revealedD: int[], revealedP: int[], unsetShow: bool}
+     * @return array{open: string[], limits: array<string, array{read: int, frontier: int, set?: bool}>, revealedD: int[], revealedP: int[], unsetShow: bool}
      */
     private function rules(User $actor): array
     {
@@ -143,11 +143,13 @@ final class HiddenFromSearch
         // A work whose extension is switched off counts as unmarked: open to everyone.
         $open = array_values(array_filter($works, fn ($w) => ! $this->integrations->live($w)));
         $limits = [];
+        $unsetShow = $this->settings->get($actor->isGuest() ? 'ernestdefoe-spoiler-shield.guests' : 'ernestdefoe-spoiler-shield.members') === 'show';
+
         foreach ($positions as $work => $p) {
             if (in_array($work, $open, true)) {
                 continue;
             }
-            if ($p['read'] === Marks::FINISHED) {
+            if ($p['read'] === Marks::FINISHED || ($unsetShow && ($p['set'] ?? true) === false)) {
                 $open[] = $work;
             } else {
                 $limits[$work] = $p;
@@ -166,8 +168,6 @@ final class HiddenFromSearch
                 $row->type === 'd' ? $revealedD[] = (int) $row->item_id : $revealedP[] = (int) $row->item_id;
             }
         }
-
-        $unsetShow = $this->settings->get($actor->isGuest() ? 'ernestdefoe-spoiler-shield.guests' : 'ernestdefoe-spoiler-shield.members') === 'show';
 
         $value = compact('open', 'limits', 'revealedD', 'revealedP', 'unsetShow');
         self::$rules = ['actor' => (int) $actor->id, 'value' => $value];

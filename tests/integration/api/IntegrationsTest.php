@@ -158,15 +158,29 @@ class IntegrationsTest extends TestCase
         $this->assertStringNotContainsString(self::CHAPTER, $this->api('GET', '/api/discussions/21', 3)[2], 'the next-chapter link');
         $this->assertStringNotContainsString(self::CHAPTER, $this->api('GET', '/api/anthology/series/1', null)[2]);
 
-        // Following a link straight to chapter three (and seeing it blurred) doesn't unlock it.
-        $this->database()->table('discussion_user')->insert(['user_id' => 3, 'discussion_id' => 22, 'last_read_post_number' => 1]);
+        // Following a link straight to chapter three (and seeing it blurred) doesn't count as reading it.
+        $read = fn (int $discussion) => $this->api('PATCH', '/api/discussions/'.$discussion, 3, ['data' => ['type' => 'discussions', 'id' => (string) $discussion, 'attributes' => ['lastReadPostNumber' => 1]]]);
+        $read(22);
+        $this->assertSame(0, (int) $this->database()->table('discussion_user')->where(['user_id' => 3, 'discussion_id' => 22])->value('last_read_post_number'));
         $this->assertStringNotContainsString(self::CHAPTER, $this->api('GET', '/api/discussions', 3)[2]);
 
-        // She reads chapter two: all open.
-        $this->database()->table('discussion_user')->insert(['user_id' => 3, 'discussion_id' => 21, 'last_read_post_number' => 1]);
-        $raw = $this->api('GET', '/api/discussions', 3)[2];
-        $this->assertStringContainsString(self::CHAPTER, $raw);
+        // She reads chapter two: chapter three opens, but she hasn't read it, so Ash's reply stamped there stays hidden.
+        $read(21);
+        $this->assertStringContainsString(self::CHAPTER, $this->api('GET', '/api/discussions', 3)[2]);
+        $this->assertStringNotContainsString(self::REPLY, $this->api('GET', '/api/posts/'.$reply->id, 3)[2]);
+
+        // Then she reads it.
+        $read(22);
         $this->assertStringContainsString(self::REPLY, $this->api('GET', '/api/posts/'.$reply->id, 3)[2]);
+
+        // Guests start at chapter one like anyone who hasn't read any: it's open, the rest aren't.
+        $guest = $this->api('GET', '/api/discussions', null)[2];
+        $this->assertStringContainsString('Starfall chapter one', $guest);
+        $this->assertStringNotContainsString(self::CHAPTER, $guest);
+
+        // And "show everything" for members who never said applies to a series they haven't started.
+        $this->app()->getContainer()->make(\Flarum\Settings\SettingsRepositoryInterface::class)->set('ernestdefoe-spoiler-shield.members', 'show');
+        $this->assertStringContainsString(self::CHAPTER, $this->api('GET', '/api/discussions', 2)[2]);
     }
 
     #[Test]

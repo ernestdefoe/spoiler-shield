@@ -495,7 +495,9 @@ final class Redactor
      */
     private function describe(string $work, ?int $position, ?string $stored, bool $hidden, bool $revealed, array $c): array
     {
-        $viewer = $c['verdict']->positions[$work]['read'] ?? null;
+        $place = $c['verdict']->positions[$work] ?? null;
+        // A series nobody started reading has no place to show yet.
+        $viewer = $place && ($place['set'] ?? true) ? $place['read'] : null;
 
         return [
             'work' => $work,

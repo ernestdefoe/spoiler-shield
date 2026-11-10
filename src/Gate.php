@@ -97,7 +97,7 @@ final class Gate
     }
 
     /**
-     * @param array<string, array{read: int, frontier: int}> $positions
+     * @param array<string, array{read: int, frontier: int, set?: bool}> $positions
      * @param array<int, true> $revealedD
      * @param array<int, true> $revealedP
      * @param array<int, array{work: ?string, position: ?int, user: ?int}> $discussions
@@ -110,6 +110,15 @@ final class Gate
         // A viewer who never said where they are: guests and members each get the admin's default.
         $unset = $this->settings->get($actor->isGuest() ? 'ernestdefoe-spoiler-shield.guests' : 'ernestdefoe-spoiler-shield.members') === 'show'
             ? Marks::FINISHED : -1;
+
+        // An Anthology series nobody started reading still opens its first chapter; "show" opens it all.
+        if ($unset === Marks::FINISHED) {
+            foreach ($positions as $work => $p) {
+                if (($p['set'] ?? true) === false) {
+                    $positions[$work] = ['read' => Marks::FINISHED, 'frontier' => Marks::FINISHED, 'set' => false];
+                }
+            }
+        }
 
         foreach ($discussions as $id => $d) {
             if ($d['position'] === null || ! $this->integrations->live($d['work'])) {

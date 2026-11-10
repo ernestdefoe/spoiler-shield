@@ -4,7 +4,11 @@ namespace ErnestDefoe\SpoilerShield\Integration;
 
 use Ernestdefoe\Anthology\Chapter;
 use Ernestdefoe\Anthology\Series;
+use ErnestDefoe\SpoilerShield\Gate;
+use ErnestDefoe\SpoilerShield\MarkStore;
 use Flarum\Discussion\Discussion;
+use Flarum\Discussion\UserState;
+use Flarum\User\User;
 
 /**
  * An Anthology chapter's discussion sits at its chapter: added, moved or taken
@@ -27,6 +31,29 @@ final class AnthologyChapters
         $discussion->spoiler_position = max(1, (int) $chapter->position);
         $discussion->spoiler_label = null;
         $discussion->save();
+    }
+
+    /**
+     * Anthology counts a chapter read when its discussion was opened. A chapter
+     * hidden from the reader (they opened a link to it, and saw a veil) isn't
+     * read: its read marker stays where it was.
+     */
+    public static function reading(UserState $state): void
+    {
+        if (! $state->isDirty('last_read_post_number')) {
+            return;
+        }
+
+        $discussions = resolve(MarkStore::class)->discussions([(int) $state->discussion_id]);
+        $mark = $discussions[(int) $state->discussion_id] ?? null;
+        if (! $mark || ! str_starts_with((string) $mark['work'], 'an:')) {
+            return;
+        }
+
+        $reader = User::query()->find($state->user_id);
+        if ($reader && resolve(Gate::class)->check($reader, null, $discussions, [])->discussionHidden((int) $state->discussion_id)) {
+            $state->last_read_post_number = (int) $state->getOriginal('last_read_post_number');
+        }
     }
 
     public static function deleted(Chapter $chapter): void

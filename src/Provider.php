@@ -41,6 +41,7 @@ class Provider extends AbstractServiceProvider
         if (class_exists(\Ernestdefoe\Anthology\Chapter::class)) {
             \Ernestdefoe\Anthology\Chapter::saved(fn ($chapter) => AnthologyChapters::saved($chapter));
             \Ernestdefoe\Anthology\Chapter::deleted(fn ($chapter) => AnthologyChapters::deleted($chapter));
+            \Flarum\Discussion\UserState::saving(fn ($state) => AnthologyChapters::reading($state));
         }
         if (class_exists(\Ernestdefoe\Anthology\Series::class)) {
             \Ernestdefoe\Anthology\Series::deleting(fn ($series) => AnthologyChapters::seriesDeleting($series));

@@ -25,11 +25,12 @@ final class Positions
 
     /**
      * @param string[] $works
-     * @return array<string, array{read: int, frontier: int}>
+     * @return array<string, array{read: int, frontier: int, set?: bool}>
      */
     public function for(User $actor, array $works): array
     {
-        return $actor->isGuest() ? [] : ($this->forMany([(int) $actor->id], $works)[(int) $actor->id] ?? []);
+        // Guests have no rows, but an Anthology series still starts them at chapter 1.
+        return $this->forMany([(int) $actor->id], $works)[(int) $actor->id] ?? [];
     }
 
     /**
@@ -37,7 +38,7 @@ final class Positions
      *
      * @param int[] $userIds
      * @param string[] $works
-     * @return array<int, array<string, array{read: int, frontier: int}>>
+     * @return array<int, array<string, array{read: int, frontier: int, set?: bool}>>
      */
     public function forMany(array $userIds, array $works): array
     {
@@ -49,7 +50,7 @@ final class Positions
         $out = [];
 
         foreach ($this->db->table('spoiler_progress')->whereIn('user_id', $userIds)->whereIn('work', $works)->get(['user_id', 'work', 'position']) as $row) {
-            $out[(int) $row->user_id][$row->work] = ['read' => (int) $row->position, 'frontier' => (int) $row->position];
+            $out[(int) $row->user_id][$row->work] = ['read' => (int) $row->position, 'frontier' => (int) $row->position, 'set' => true];
         }
 
         $series = [];
@@ -86,7 +87,7 @@ final class Positions
      *
      * @param int[] $userIds
      * @param int[] $series
-     * @return array<int, array<string, array{read: int, frontier: int}>>
+     * @return array<int, array<string, array{read: int, frontier: int, set?: bool}>>
      */
     private function anthology(array $userIds, array $series): array
     {
@@ -140,7 +141,8 @@ final class Positions
                         break;
                     }
                 }
-                $out[$userId]['an:'.$id] = ['read' => $got, 'frontier' => $next];
+                // Nothing read yet counts as never said (the admin's default can open it all).
+                $out[$userId]['an:'.$id] = ['read' => $got, 'frontier' => $next, 'set' => $got > 0];
             }
         }
 
