@@ -2,6 +2,8 @@
 
 namespace ErnestDefoe\SpoilerShield\Integration;
 
+use Flarum\Discussion\Discussion;
+use Flarum\Post\Post;
 use Flarum\Realtime\Push\Payload\Generator;
 
 /**
@@ -22,9 +24,14 @@ class RealtimePublicPayload extends Generator
             return $payload;
         }
 
-        $strip = function (array $resource): array {
-            if (in_array($resource['type'] ?? null, ['discussions', 'posts'], true) && array_key_exists('spoilerShield', $resource['attributes'] ?? [])
-                && $resource['attributes']['spoilerShield'] !== null) {
+        // Anything from a discussion with a work: the guest's copy (even with guests on "show")
+        // isn't what every member may read, so none of its words go out here.
+        $discussion = $subject instanceof Discussion ? $subject : ($subject instanceof Post ? $subject->discussion : null);
+        $inWork = ($discussion?->spoiler_work !== null) || ($subject instanceof Post && $subject->spoiler_work !== null);
+
+        $strip = function (array $resource) use ($inWork): array {
+            if (in_array($resource['type'] ?? null, ['discussions', 'posts'], true)
+                && ($inWork || ($resource['attributes']['spoilerShield'] ?? null) !== null)) {
                 unset($resource['attributes']);
             }
 

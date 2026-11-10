@@ -418,6 +418,18 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function realtimes_public_push_carries_no_text_from_a_work_even_with_guests_on_show(): void
+    {
+        $this->setting('ernestdefoe-spoiler-shield.guests', 'show');
+        $generator = $this->app()->getContainer()->make(\Flarum\Realtime\Push\Payload\Generator::class);
+
+        // The chapter 4 discussion's opening post carries no mark of its own; members on "blur" get the public channel too.
+        $raw = json_encode($generator(Post::query()->find(1)));
+        $this->assertStringNotContainsString(self::BODY, $raw);
+        $this->assertStringNotContainsString(self::TITLE, $raw);
+    }
+
+    #[Test]
     public function a_new_discussion_is_marked_from_the_composer_and_its_slug_hides_the_title(): void
     {
         $create = fn (array $mark) => $this->api('POST', '/api/discussions', 2, ['data' => ['type' => 'discussions', 'attributes' => [
