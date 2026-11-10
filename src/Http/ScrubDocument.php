@@ -105,23 +105,30 @@ class ScrubDocument
 
     /**
      * Whether some reply in this marked discussion is hidden from the viewer:
-     * the furthest-stamped one by someone else decides (reveals aside, so this
-     * errs on hiding). One query.
+     * the furthest stamp by someone else in each work decides (places in
+     * different works don't compare; reveals aside, so this errs on hiding).
+     * One query.
      *
      * @param array{work: ?string, position: ?int, label: ?string, user: ?int} $discussion
      */
     private function replyHidden(User $actor, ?Session $session, int $id, array $discussion): bool
     {
+        $g = $this->db->getQueryGrammar();
         $furthest = $this->db->table('posts')->where('discussion_id', $id)->whereNotNull('spoiler_position')
             ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', (int) $actor->id))
-            ->orderByDesc('spoiler_position')->first(['spoiler_position', 'spoiler_work']);
+            ->groupBy('spoiler_work')
+            ->selectRaw($g->wrap('spoiler_work').' as work, max('.$g->wrap('spoiler_position').') as furthest')
+            ->get();
 
-        if (! $furthest) {
+        if ($furthest->isEmpty()) {
             return false;
         }
 
-        $verdict = $this->gate->check($actor, $session, [$id => $discussion], [0 => ['discussion' => $id, 'position' => (int) $furthest->spoiler_position, 'user' => null, 'work' => $furthest->spoiler_work]]);
+        $posts = [];
+        foreach ($furthest as $i => $row) {
+            $posts[$i] = ['discussion' => $id, 'position' => (int) $row->furthest, 'user' => null, 'work' => $row->work];
+        }
 
-        return $verdict->postHidden(0);
+        return $this->gate->check($actor, $session, [$id => $discussion], $posts)->hiddenPosts !== [];
     }
 }

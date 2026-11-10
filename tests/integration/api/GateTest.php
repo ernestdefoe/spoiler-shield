@@ -592,6 +592,16 @@ class GateTest extends TestCase
 
         $this->assertStringNotContainsString(self::REPLY, $this->api('GET', '/d/2', 3)[2]);
         $this->assertStringContainsString(self::REPLY, $this->api('GET', '/d/2', 4)[2], 'Ash may read them all');
+
+        // A reply quoting another work, at a lower number than the furthest stamp here: places in
+        // different works don't compare. Ash finished The Long Road, but not the other book.
+        $now = Carbon::now()->subHour();
+        $this->database()->table('spoiler_works')->insert(['id' => 2, 'title' => 'Other Book', 'kind' => 'book', 'steps' => json_encode(['One', 'Two']), 'created_at' => $now, 'updated_at' => $now]);
+        $this->database()->table('posts')->insert([
+            ['id' => 9, 'discussion_id' => 2, 'number' => 4, 'user_id' => 3, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>The other book ends at sea</p></t>', 'spoiler_work' => 'w:2', 'spoiler_position' => 2],
+            ['id' => 10, 'discussion_id' => 2, 'number' => 5, 'user_id' => 5, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>Chapter five, finally</p></t>', 'spoiler_work' => 'w:1', 'spoiler_position' => 5],
+        ]);
+        $this->assertStringNotContainsString('ends at sea', $this->api('GET', '/d/2', 4)[2]);
     }
 
     #[Test]
