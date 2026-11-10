@@ -10,7 +10,7 @@
 - **Never rewrite by matching words** (that confirms a guess): only link text to /d/{id}; page descriptions/JSON-LD go whole when a page could carry a spoiler.
 - **Redaction is an allow-list**: a hidden discussion/post keeps numbers, booleans, `can*`, dates and named relationships; every other string/array attribute and every other relationship goes, and included records only they pointed to are dropped. New core or extension fields are hidden by default.
 - **Fail closed**: if the Redactor throws, `redactAll` blanks every title and body in the response.
-- **Marks live on the rows** (`discussions.spoiler_work/position/label`, `posts.spoiler_work/position/label` — a stamp carries its own work, so a quote of another work, or unmarking the discussion, keeps it gated; a reply is stamped at least as far as anything it quotes or mentions), so reading them costs nothing; `ssMark` is the internal field the Redactor reads and always removes. Gate queries are constant per response (progress, reveals, work titles, Curio offer).
+- **Marks live on the rows** (`discussions.spoiler_work/position/label`, `posts.spoiler_work/position/label` — a stamp carries its own work, so a quote of another work, or unmarking the discussion, keeps it gated; a reply is stamped at least as far as anything it quotes or mentions, and a reply with its own place quoting another work's spoiler is refused; an edit raises the stamp to the author's place now, never lower; before a discussion's mark goes down/away/to another work, its unstamped replies take the old place in one UPDATE (`MarkWriter::keepRepliesGated`); a moved post keeps its source's place (CommentPost saving — Eloquent fires events under the subclass)), so reading them costs nothing; `ssMark` is the internal field the Redactor reads and always removes. Gate queries are constant per response (progress, reveals, work titles, Curio offer).
 - **Work keys**: `w:{id}` (spoiler_works, ladder = JSON `steps`, position = 1-based index), `mq:{media id}` (Marquee: season×100000+episode, ×100000+99999 = whole season), `an:{series id}` (Anthology chapter position). `Marks::FINISHED` (2147483647) is past everything.
 - **Anthology**: progress is read from core's `discussion_user` (what the member opened). Discussions compare against the *frontier* (the next unread chapter is open); posts against *read*.
 - **A positioned discussion's slug is its place** (`Marks::slugFor`, language-independent), so titles never reach URLs or sitemaps; unmarking restores the title slug.
@@ -19,6 +19,7 @@
 - Marquee/Anthology marks count as unmarked while that extension is off (`Integrations::live`). Anthology: a chapter opened while hidden isn't counted read (UserState saving); guests and new readers start at chapter 1; the "show" default applies to a series not started.
 - Hidden items report canEdit/canRename false (editing would start from the placeholder).
 - extend.php uses string literals outside closures, never class constants.
+- Backfills page with `chunkById` (a filter on the column being filled makes `chunk()` skip pages).
 
 ## Testing
 
