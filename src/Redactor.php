@@ -47,9 +47,10 @@ final class Redactor
 
     /**
      * @param array<string, mixed> $doc
+     * @param bool $search the words of a search chose these: hidden discussions are left out
      * @return array<string, mixed>
      */
-    public function redact(array $doc, User $actor, ?Session $session): array
+    public function redact(array $doc, User $actor, ?Session $session, bool $search = false): array
     {
         $single = isset($doc['data']['type']);
         $data = $single ? [$doc['data']] : (is_array($doc['data'] ?? null) ? $doc['data'] : []);
@@ -70,6 +71,11 @@ final class Redactor
         }
         foreach ($included as $i => $resource) {
             $included[$i] = $this->resource($resource, $context);
+        }
+
+        // A search must not confirm a guess: a hidden discussion that matched the words is left out.
+        if ($search && ! $single && $verdict->hiddenDiscussions) {
+            $data = array_values(array_filter($data, fn ($r) => ($r['type'] ?? '') !== 'discussions' || ! $verdict->discussionHidden((int) $r['id'])));
         }
 
         if ($verdict->anythingHidden() && $included) {

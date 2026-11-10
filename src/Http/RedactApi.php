@@ -56,7 +56,7 @@ class RedactApi implements MiddlewareInterface
             $session = $request->getAttribute('session');
             $doc = $series
                 ? $this->redactor->redactChapters($doc, $actor, $session)
-                : $this->redactor->redact($doc, $actor, $session);
+                : $this->redactor->redact($doc, $actor, $session, $this->searching($request));
         } catch (Throwable $e) {
             // Fail closed: a broken check hides every title and post rather than showing one.
             $this->log->error('[spoiler-shield] '.$e->getMessage(), ['exception' => $e]);
@@ -66,5 +66,13 @@ class RedactApi implements MiddlewareInterface
         return $response
             ->withBody((new StreamFactory())->createStream((string) json_encode($doc, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES)))
             ->withoutHeader('Content-Length');
+    }
+
+    /** A search by words: the API's own `filter[q]`, which every search driver answers. */
+    private function searching(ServerRequestInterface $request): bool
+    {
+        $filter = $request->getQueryParams()['filter'] ?? null;
+
+        return is_array($filter) && trim((string) ($filter['q'] ?? '')) !== '';
     }
 }
