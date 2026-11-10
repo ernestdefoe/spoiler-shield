@@ -158,8 +158,12 @@ class IntegrationsTest extends TestCase
         $this->assertStringNotContainsString(self::CHAPTER, $this->api('GET', '/api/discussions/21', 3)[2], 'the next-chapter link');
         $this->assertStringNotContainsString(self::CHAPTER, $this->api('GET', '/api/anthology/series/1', null)[2]);
 
-        // She reads chapter two and three: all open.
-        $this->database()->table('discussion_user')->insert([['user_id' => 3, 'discussion_id' => 21, 'last_read_post_number' => 1], ['user_id' => 3, 'discussion_id' => 22, 'last_read_post_number' => 1]]);
+        // Following a link straight to chapter three (and seeing it blurred) doesn't unlock it.
+        $this->database()->table('discussion_user')->insert(['user_id' => 3, 'discussion_id' => 22, 'last_read_post_number' => 1]);
+        $this->assertStringNotContainsString(self::CHAPTER, $this->api('GET', '/api/discussions', 3)[2]);
+
+        // She reads chapter two: all open.
+        $this->database()->table('discussion_user')->insert(['user_id' => 3, 'discussion_id' => 21, 'last_read_post_number' => 1]);
         $raw = $this->api('GET', '/api/discussions', 3)[2];
         $this->assertStringContainsString(self::CHAPTER, $raw);
         $this->assertStringContainsString(self::REPLY, $this->api('GET', '/api/posts/'.$reply->id, 3)[2]);

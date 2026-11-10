@@ -82,7 +82,7 @@ final class Positions
     /**
      * Anthology keeps no progress of its own: a chapter is read when the member
      * opened its discussion (core's discussion_user). Two queries for every
-     * series and member: the chapters, and how far each member read.
+     * series and member: the chapters, and which ones each member opened.
      *
      * @param int[] $userIds
      * @param int[] $series
@@ -91,23 +91,42 @@ final class Positions
     private function anthology(array $userIds, array $series): array
     {
         $positions = [];
-        foreach ($this->db->table('anthology_chapters')->whereIn('series_id', $series)->orderBy('position')->get(['series_id', 'position']) as $row) {
+        // A chapter a moderator hid isn't one anybody has to get through.
+        $chapters = $this->db->table('anthology_chapters')
+            ->join('discussions', 'discussions.id', '=', 'anthology_chapters.discussion_id')
+            ->whereIn('anthology_chapters.series_id', $series)
+            ->whereNull('discussions.hidden_at')
+            ->orderBy('anthology_chapters.position')
+            ->get(['anthology_chapters.series_id', 'anthology_chapters.position']);
+        foreach ($chapters as $row) {
             $positions[(int) $row->series_id][] = (int) $row->position;
         }
 
-        // Raw select: the grammar wraps (and prefixes) the table names.
-        $g = $this->db->getQueryGrammar();
-        $read = [];
+        // Chapters each member opened. Only an unbroken run from the first chapter counts as
+        // read: following a link to chapter 9 (and seeing it blurred) doesn't unlock it.
+        $opened = [];
         $rows = $this->db->table('discussion_user')
             ->join('anthology_chapters', 'anthology_chapters.discussion_id', '=', 'discussion_user.discussion_id')
             ->whereIn('discussion_user.user_id', $userIds)
             ->whereIn('anthology_chapters.series_id', $series)
             ->where('discussion_user.last_read_post_number', '>', 0)
-            ->groupBy('discussion_user.user_id', 'anthology_chapters.series_id')
-            ->selectRaw($g->wrap('discussion_user.user_id').' as reader, '.$g->wrap('anthology_chapters.series_id').' as series, max('.$g->wrap('anthology_chapters.position').') as furthest')
-            ->get();
+            ->get(['discussion_user.user_id', 'anthology_chapters.series_id', 'anthology_chapters.position']);
         foreach ($rows as $row) {
-            $read[(int) $row->reader][(int) $row->series] = (int) $row->furthest;
+            $opened[(int) $row->user_id][(int) $row->series_id][(int) $row->position] = true;
+        }
+
+        $read = [];
+        foreach ($opened as $userId => $bySeries) {
+            foreach ($bySeries as $id => $set) {
+                $got = 0;
+                foreach ($positions[$id] ?? [] as $position) {
+                    if (! isset($set[$position])) {
+                        break;
+                    }
+                    $got = $position;
+                }
+                $read[$userId][$id] = $got;
+            }
         }
 
         $out = [];
