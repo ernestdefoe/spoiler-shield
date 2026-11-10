@@ -610,6 +610,17 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function an_extensions_whos_reading_what_list_is_gated_too(): void
+    {
+        // Like Presence: "ash is viewing <title>", with no link, just the discussion's id and title.
+        $this->extend((new Extend\Routes('api'))->get('/test-presence', 'test.presence', PresenceController::class));
+
+        $this->assertStringNotContainsString(self::TITLE, $this->api('GET', '/api/test-presence', 3)[2]);
+        $this->assertStringNotContainsString(self::TITLE, $this->api('GET', '/api/test-presence', null)[2]);
+        $this->assertStringContainsString(self::TITLE, $this->api('GET', '/api/test-presence', 4)[2]);
+    }
+
+    #[Test]
     public function a_members_own_words_are_never_rewritten_so_nothing_confirms_a_guess(): void
     {
         $this->extend((new Extend\Routes('api'))->get('/test-widgets', 'test.widgets', WidgetController::class));
@@ -668,6 +679,19 @@ class GateTest extends TestCase
         );
 
         $this->assertSame([4], RecordingEmailDriver::$sent, 'its driver still sends, to Ash only');
+    }
+}
+
+class PresenceController implements \Psr\Http\Server\RequestHandlerInterface
+{
+    public function handle(ServerRequestInterface $request): \Psr\Http\Message\ResponseInterface
+    {
+        $d = Discussion::query()->find(1);
+
+        return new \Laminas\Diactoros\Response\JsonResponse(['members' => [
+            ['user' => ['id' => 4, 'displayName' => 'ash'], 'activity' => ['kind' => 'discussion', 'discussion' => ['id' => $d->id, 'title' => $d->title, 'slug' => $d->slug]]],
+            ['user' => ['id' => 2], 'activity' => ['kind' => 'reply', 'discussionId' => $d->id, 'discussionTitle' => $d->title]],
+        ]]);
     }
 }
 

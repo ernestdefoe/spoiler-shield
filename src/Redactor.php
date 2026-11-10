@@ -143,15 +143,15 @@ final class Redactor
     public function redactLinks(array $doc, User $actor, ?Session $session): array
     {
         $ids = [];
-        $collect = function ($node) use (&$collect, &$ids) {
+        $collect = function ($node, $key = null) use (&$collect, &$ids) {
             if (! is_array($node)) {
                 return;
             }
-            if (($id = $this->linkedId($node)) !== null) {
+            if (($id = $this->linkedId($node, $key)) !== null) {
                 $ids[$id] = true;
             }
-            foreach ($node as $value) {
-                $collect($value);
+            foreach ($node as $k => $value) {
+                $collect($value, is_int($k) ? $key : $k);
             }
         };
         $collect($doc);
@@ -168,16 +168,16 @@ final class Redactor
         }
 
         $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))), $actor);
-        $replace = function ($node) use (&$replace, $verdict, $discussions, $works) {
+        $replace = function ($node, $parent = null) use (&$replace, $verdict, $discussions, $works) {
             if (! is_array($node)) {
                 return $node;
             }
-            $id = $this->linkedId($node);
+            $id = $this->linkedId($node, $parent);
             if ($id !== null && $verdict->discussionHidden($id)) {
                 $d = $discussions[$id];
                 $label = $this->labels->for((string) $d['work'], (int) $d['position'], $d['label']);
                 $slug = Marks::slugFor((string) $d['work'], (int) $d['position'], $d['label']);
-                foreach (['title', 'name'] as $key) {
+                foreach (['title', 'name', 'discussionTitle'] as $key) {
                     if (isset($node[$key]) && is_string($node[$key])) {
                         $node[$key] = $this->placeholder(['label' => $label, 'title' => $works[$d['work']]['title'] ?? '']);
                     }
@@ -199,7 +199,7 @@ final class Redactor
             }
             foreach ($node as $key => $value) {
                 if (is_array($value)) {
-                    $node[$key] = $replace($value);
+                    $node[$key] = $replace($value, is_int($key) ? $parent : $key);
                 }
             }
 
@@ -244,11 +244,26 @@ final class Redactor
      *
      * @param array<mixed> $node
      */
-    private function linkedId(array $node): ?int
+    private function linkedId(array $node, int|string|null $parent = null): ?int
     {
-        if (in_array($node['type'] ?? null, ['discussions', 'posts'], true) || (! isset($node['title']) && ! isset($node['name']))) {
+        if (in_array($node['type'] ?? null, ['discussions', 'posts'], true)) {
             return null;
         }
+
+        // { "discussionId": 12, "discussionTitle": "…" }
+        if (isset($node['discussionId'], $node['discussionTitle']) && is_numeric($node['discussionId'])) {
+            return (int) $node['discussionId'];
+        }
+
+        if (! isset($node['title']) && ! isset($node['name'])) {
+            return null;
+        }
+
+        // { "discussion": { "id": 12, "title": "…" } } (Presence's "viewing" line)
+        if (in_array($parent, ['discussion', 'discussions'], true) && isset($node['id']) && is_numeric($node['id'])) {
+            return (int) $node['id'];
+        }
+
         foreach (['url', 'href', 'link', 'permalink'] as $key) {
             if (isset($node[$key]) && is_string($node[$key]) && preg_match('#/d/(\d+)(?:[-/?\#]|$)#', $node[$key], $m)) {
                 return (int) $m[1];
@@ -293,19 +308,22 @@ final class Redactor
             $doc['included'] = array_map($blank, $doc['included']);
         }
         // Other extensions' lists of discussions: no names.
-        $links = function ($node) use (&$links) {
+        $links = function ($node, $parent = null) use (&$links) {
             if (! is_array($node)) {
                 return $node;
             }
-            if ($this->linkedId($node) !== null) {
-                foreach (['title', 'name'] as $key) {
+            if ($this->linkedId($node, $parent) !== null) {
+                foreach (['title', 'name', 'discussionTitle', ...self::LINK_TEXT_KEYS] as $key) {
                     if (isset($node[$key])) {
                         $node[$key] = '';
                     }
                 }
             }
+            foreach ($node as $key => $value) {
+                $node[$key] = $links($value, is_int($key) ? $parent : $key);
+            }
 
-            return array_map($links, $node);
+            return $node;
         };
         $doc = $links($doc);
 
