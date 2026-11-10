@@ -186,12 +186,13 @@ class WorksController implements RequestHandlerInterface
             return Json::error(403, 'work_in_use');
         }
 
-        // Through the model, so each slug goes back to its title.
+        // Through the model, so each slug goes back to its title and its replies stay gated.
         Discussion::query()->where('spoiler_work', $key)->each(function (Discussion $d) {
             $d->spoiler_work = $d->spoiler_position = $d->spoiler_label = null;
             $d->save();
         });
-        $this->db->table('posts')->where('spoiler_work', $key)->update(['spoiler_work' => null, 'spoiler_position' => null, 'spoiler_label' => null]);
+        // Its replies keep their stamps (and take the discussion's place first, in the saving hook):
+        // they stay blurred, revealable one by one, rather than open to everyone at once.
         $this->db->table('spoiler_progress')->where('work', $key)->delete();
         $work->delete();
 

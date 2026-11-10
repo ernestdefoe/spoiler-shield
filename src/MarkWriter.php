@@ -6,6 +6,7 @@ use Flarum\Discussion\Discussion;
 use Flarum\Discussion\Event\Saving as DiscussionSaving;
 use Flarum\Foundation\ValidationException;
 use Flarum\Post\CommentPost;
+use Flarum\Post\Post;
 use Flarum\Post\Event\Saving as PostSaving;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Illuminate\Database\ConnectionInterface;
@@ -125,7 +126,53 @@ final class MarkWriter
             $discussion->spoiler_label = null;
         }
 
+        $this->keepRepliesGated($discussion);
         $this->slug($discussion);
+    }
+
+    /**
+     * A discussion's mark going down, away or to another work (unmarked, a Marquee relink, out
+     * of an Anthology series, its work deleted) would open its replies that carry no stamp of
+     * their own: first they take the old work and place, in one UPDATE. The opening post goes
+     * with the discussion: whoever changed the mark decided about it.
+     */
+    private function keepRepliesGated(Discussion $discussion): void
+    {
+        $oldWork = $discussion->getOriginal('spoiler_work');
+        $oldPosition = $discussion->getOriginal('spoiler_position');
+
+        if (! $discussion->exists || $oldWork === null || $oldPosition === null) {
+            return;
+        }
+
+        $newPosition = $discussion->spoiler_position;
+        if ($discussion->spoiler_work === $oldWork && $newPosition !== null && (int) $newPosition >= (int) $oldPosition) {
+            return;
+        }
+
+        $this->db->table('posts')
+            ->where('discussion_id', $discussion->id)
+            ->whereNull('spoiler_position')
+            ->when($discussion->first_post_id, fn ($q, $first) => $q->where('id', '!=', $first))
+            ->update(['spoiler_work' => $oldWork, 'spoiler_position' => (int) $oldPosition, 'spoiler_label' => $discussion->getOriginal('spoiler_label')]);
+    }
+
+    /**
+     * A post moved to another discussion (fof/merge-discussions, a split) carries its source
+     * discussion's place with it, unless it has its own.
+     */
+    public function postMoving(Post $post): void
+    {
+        if (! $post->exists || ! $post->isDirty('discussion_id') || $post->spoiler_position !== null) {
+            return;
+        }
+
+        $source = $this->db->table('discussions')->where('id', $post->getOriginal('discussion_id'))->first(['spoiler_work', 'spoiler_position', 'spoiler_label']);
+        if ($source && $source->spoiler_work !== null && $source->spoiler_position !== null) {
+            $post->spoiler_work = $source->spoiler_work;
+            $post->spoiler_position = (int) $source->spoiler_position;
+            $post->spoiler_label = $source->spoiler_label;
+        }
     }
 
     public function slug(Discussion $discussion): void

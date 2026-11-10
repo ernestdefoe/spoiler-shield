@@ -374,6 +374,36 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function lowering_clearing_or_deleting_a_mark_keeps_unstamped_replies_hidden(): void
+    {
+        $this->app();
+        // Una (no place set, so her reply carries no stamp) replied in the chapter 4 discussion.
+        $quiet = 'Kael was always going to break the oath';
+        $this->database()->table('posts')->insert(['id' => 7, 'discussion_id' => 1, 'number' => 2, 'user_id' => 5, 'type' => 'comment', 'created_at' => Carbon::now()->subHour(), 'content' => '<t><p>'.$quiet.'</p></t>']);
+
+        $mark = fn ($value) => $this->api('PATCH', '/api/discussions/1', 1, ['data' => ['type' => 'discussions', 'id' => '1', 'attributes' => ['spoilerShield' => $value]]]);
+
+        // Lowered to chapter 2: the reply keeps chapter 4.
+        $mark(['work' => 'w:1', 'position' => 2]);
+        $this->assertSame(['w:1', 4], [Post::query()->find(7)->spoiler_work, (int) Post::query()->find(7)->spoiler_position]);
+        $this->assertStringNotContainsString($quiet, $this->api('GET', '/api/posts/7', 3)[2]);
+
+        // Moved into another discussion (fof/merge, a split): it keeps its place.
+        $this->database()->table('posts')->insert(['id' => 8, 'discussion_id' => 1, 'number' => 3, 'user_id' => 5, 'type' => 'comment', 'created_at' => Carbon::now()->subHour(), 'content' => '<t><p>Moved note</p></t>']);
+        $this->database()->table('discussions')->where('id', 1)->update(['spoiler_position' => 4]);
+        $moved = Post::query()->find(8);
+        $moved->discussion_id = 3;
+        $moved->number = 2;
+        $moved->save();
+        $this->assertSame(['w:1', 4], [$moved->fresh()->spoiler_work, (int) $moved->fresh()->spoiler_position]);
+
+        // The work deleted by a moderator: its replies stay blurred (one by one to reveal), not open to all.
+        $this->assertSame(204, $this->api('DELETE', '/api/spoiler-shield/works/1', 1)[0]);
+        $this->assertStringNotContainsString($quiet, $this->api('GET', '/api/posts/7', 3)[2]);
+        $this->assertStringNotContainsString(self::REPLY, $this->api('GET', '/api/posts/3', 3)[2]);
+    }
+
+    #[Test]
     public function unmarking_a_discussion_keeps_its_stamped_replies_hidden(): void
     {
         $this->api('PATCH', '/api/discussions/2', 1, ['data' => ['type' => 'discussions', 'id' => '2', 'attributes' => ['spoilerShield' => null]]]);

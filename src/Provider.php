@@ -36,6 +36,8 @@ class Provider extends AbstractServiceProvider
         }
 
         Discussion::saving(fn (Discussion $discussion) => $this->container->make(MarkWriter::class)->discussionModelSaving($discussion));
+        // On the subclass: Eloquent fires a model's events under its own class, and replies are CommentPosts.
+        \Flarum\Post\CommentPost::saving(fn (\Flarum\Post\Post $post) => $this->container->make(MarkWriter::class)->postMoving($post));
 
         // Anthology may be absent: only then are its classes missing, and nothing of it ever saves.
         if (class_exists(\Ernestdefoe\Anthology\Chapter::class)) {

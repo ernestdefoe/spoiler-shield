@@ -121,6 +121,14 @@ class IntegrationsTest extends TestCase
         $this->assertStringContainsString(self::EPISODE, $raw);
         $this->assertStringContainsString(self::SEASON, $raw);
 
+        // Relinked to an earlier episode in Marquee: a reply without a stamp keeps S2E5.
+        $this->database()->table('posts')->insert(['id' => 90, 'discussion_id' => 10, 'number' => 2, 'user_id' => 4, 'type' => 'comment', 'created_at' => Carbon::now()->subHour(), 'content' => '<t><p>The harbor burns</p></t>']);
+        $episode->setAttribute('marquee_episode', 1);
+        $episode->save();
+        $this->assertSame(['mq:1', 200005], [Post::query()->find(90)->spoiler_work, (int) Post::query()->find(90)->spoiler_position]);
+        $episode->setAttribute('marquee_episode', 5);
+        $episode->save();
+
         // Unlinked in Marquee: the mark goes, and the title comes back to the slug.
         $episode->setAttribute('marquee_media_id', null);
         $episode->save();
@@ -236,6 +244,12 @@ class IntegrationsTest extends TestCase
         // And "show everything" for members who never said applies to a series they haven't started.
         $this->app()->getContainer()->make(\Flarum\Settings\SettingsRepositoryInterface::class)->set('ernestdefoe-spoiler-shield.members', 'show');
         $this->assertStringContainsString(self::CHAPTER, $this->api('GET', '/api/discussions', 2)[2]);
+
+        // A chapter taken out of the series keeps its replies' places; a deleted series takes its stamps with it.
+        Chapter::query()->find(21)->delete();
+        $this->assertSame('an:1', $reply->fresh()->spoiler_work);
+        \Ernestdefoe\Anthology\Series::query()->find(1)->delete();
+        $this->assertNull($reply->fresh()->spoiler_work);
     }
 
     #[Test]

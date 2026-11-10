@@ -64,6 +64,10 @@ final class AnthologyChapters
     public static function seriesDeleting(Series $series): void
     {
         self::clear(Discussion::query(), 'an:'.(int) $series->id);
+
+        // A deleted series has no chapters left to read up to: its stamps would stay blurred for good.
+        resolve(\Illuminate\Database\ConnectionInterface::class)->table('posts')->where('spoiler_work', 'an:'.(int) $series->id)
+            ->update(['spoiler_work' => null, 'spoiler_position' => null, 'spoiler_label' => null]);
     }
 
     /** @param \Illuminate\Database\Eloquent\Builder<Discussion> $query */
