@@ -21,9 +21,10 @@ return [
         };
 
         if ($enabled('ernestdefoe-marquee') && $schema->hasColumn('discussions', 'marquee_media_id')) {
+            // chunkById: the filter (spoiler_work null) changes as rows are filled, which makes chunk() skip pages.
             $db->table('discussions')->whereNotNull('marquee_media_id')->whereNull('spoiler_work')
-                ->orderBy('id')->select(['id', 'marquee_media_id', 'marquee_season', 'marquee_episode'])
-                ->chunk(500, function ($rows) use ($db) {
+                ->select(['id', 'marquee_media_id', 'marquee_season', 'marquee_episode'])
+                ->chunkById(500, function ($rows) use ($db) {
                     foreach ($rows as $row) {
                         $position = Marks::marqueePosition($row->marquee_season ? (int) $row->marquee_season : null, $row->marquee_episode ? (int) $row->marquee_episode : null);
                         $episode = $position === null ? 0 : $position % Marks::SEASON;
@@ -38,15 +39,15 @@ return [
         }
 
         if ($enabled('ernestdefoe-anthology') && $schema->hasTable('anthology_chapters')) {
-            $db->table('anthology_chapters')->orderBy('discussion_id')->select(['discussion_id', 'series_id', 'position'])
-                ->chunk(500, function ($rows) use ($db) {
+            $db->table('anthology_chapters')->select(['discussion_id', 'series_id', 'position'])
+                ->chunkById(500, function ($rows) use ($db) {
                     foreach ($rows as $row) {
                         $position = max(1, (int) $row->position);
                         $db->table('discussions')->where('id', $row->discussion_id)
                             ->where(fn ($q) => $q->whereNull('spoiler_work')->orWhere('spoiler_work', 'like', 'mq:%'))
                             ->update(['spoiler_work' => 'an:'.(int) $row->series_id, 'spoiler_position' => $position, 'spoiler_label' => null, 'slug' => 'chapter-'.$position]);
                     }
-                });
+                }, 'discussion_id');
         }
     },
     'down' => function (Builder $schema) {

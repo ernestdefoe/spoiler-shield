@@ -157,6 +157,21 @@ class IntegrationsTest extends TestCase
     }
 
     #[Test]
+    public function the_marquee_backfill_reaches_every_row_past_the_first_page(): void
+    {
+        $this->app();
+        $db = $this->database();
+        $now = Carbon::now()->subHour();
+        foreach (array_chunk(range(1001, 2200), 300) as $ids) {
+            $db->table('discussions')->insert(array_map(fn ($id) => ['id' => $id, 'title' => 'T'.$id, 'slug' => 't', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'marquee_media_id' => 1, 'marquee_season' => 1, 'marquee_episode' => 2], $ids));
+        }
+
+        (require __DIR__.'/../../../migrations/2026_11_10_200004_mark_existing_marquee_and_anthology_discussions.php')['up']($db->getSchemaBuilder());
+
+        $this->assertSame(1200, $db->table('discussions')->where('spoiler_work', 'mq:1')->where('spoiler_position', 100002)->count());
+    }
+
+    #[Test]
     public function long_seasons_keep_their_episodes_in_order(): void
     {
         // A daily show: 1,200 episodes in season one.

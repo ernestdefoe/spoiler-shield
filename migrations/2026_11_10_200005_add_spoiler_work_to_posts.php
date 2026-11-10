@@ -11,17 +11,22 @@ use Illuminate\Database\Schema\Builder;
  */
 return [
     'up' => function (Builder $schema) {
-        $schema->table('posts', function (Blueprint $table) {
-            $table->string('spoiler_work', 24)->nullable();
-            $table->index('spoiler_work');
-        });
-        $schema->table('discussions', function (Blueprint $table) {
-            $table->index('spoiler_work');
-        });
+        if (! $schema->hasColumn('posts', 'spoiler_work')) {
+            $schema->table('posts', function (Blueprint $table) {
+                $table->string('spoiler_work', 24)->nullable();
+                $table->index('spoiler_work');
+            });
+        }
+        if (! $schema->hasIndex('discussions', ['spoiler_work'])) {
+            $schema->table('discussions', function (Blueprint $table) {
+                $table->index('spoiler_work');
+            });
+        }
 
         $db = $schema->getConnection();
-        $db->table('posts')->whereNotNull('spoiler_position')->whereNull('spoiler_work')->orderBy('id')->select(['id', 'discussion_id'])
-            ->chunk(500, function ($rows) use ($db) {
+        // chunkById: the filter (spoiler_work null) changes as rows are filled, which makes chunk() skip pages.
+        $db->table('posts')->whereNotNull('spoiler_position')->whereNull('spoiler_work')->select(['id', 'discussion_id'])
+            ->chunkById(500, function ($rows) use ($db) {
                 $works = $db->table('discussions')->whereIn('id', $rows->pluck('discussion_id')->unique()->all())->pluck('spoiler_work', 'id');
                 foreach ($rows as $row) {
                     if ($work = $works[$row->discussion_id] ?? null) {

@@ -224,6 +224,21 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function the_posts_backfill_reaches_every_row_past_the_first_page(): void
+    {
+        $this->app();
+        $db = $this->database();
+        $now = Carbon::now()->subHour();
+        foreach (array_chunk(range(1001, 2200), 300) as $ids) {
+            $db->table('posts')->insert(array_map(fn ($id) => ['id' => $id, 'discussion_id' => 2, 'number' => $id, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>x</p></t>', 'spoiler_position' => 5], $ids));
+        }
+
+        (require __DIR__.'/../../../migrations/2026_11_10_200005_add_spoiler_work_to_posts.php')['up']($db->getSchemaBuilder());
+
+        $this->assertSame(0, $db->table('posts')->whereNotNull('spoiler_position')->whereNull('spoiler_work')->count());
+    }
+
+    #[Test]
     public function the_author_always_sees_their_own(): void
     {
         $this->app();
