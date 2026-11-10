@@ -309,7 +309,7 @@ final class Redactor
      * discussion isn't included): one query each for discussions and posts.
      *
      * @param array<int, array<string, mixed>> $resources
-     * @return array{0: array<int, array{work: ?string, position: ?int, label: ?string, user: ?int}>, 1: array<int, array{discussion: int, position: ?int, label: ?string, user: ?int}>}
+     * @return array{0: array<int, array{work: ?string, position: ?int, label: ?string, user: ?int, first?: ?int, last?: ?int}>, 1: array<int, array{discussion: int, position: ?int, label: ?string, user: ?int}>}
      */
     private function marks(array $resources): array
     {
@@ -322,7 +322,7 @@ final class Redactor
 
             if (($resource['type'] ?? '') === 'discussions') {
                 if (is_array($mark)) {
-                    $discussions[$id] = ['work' => $mark[0], 'position' => $mark[1], 'label' => $mark[2], 'user' => $mark[3]];
+                    $discussions[$id] = ['work' => $mark[0], 'position' => $mark[1], 'label' => $mark[2], 'user' => $mark[3], 'first' => $mark[4] ?? null, 'last' => $mark[5] ?? null];
                 } else {
                     $needD[$id] = true;
                 }
@@ -351,6 +351,20 @@ final class Redactor
 
         $needD = array_diff_key($needD, $discussions);
         $discussions += $this->store->discussions(array_keys($needD));
+
+        // A marked discussion's first and last posts, wherever they are: other extensions put
+        // their words on the discussion itself (a theme's "last reply" excerpt).
+        $ends = [];
+        foreach ($discussions as $d) {
+            if ($d['work'] !== null) {
+                foreach ([$d['first'] ?? null, $d['last'] ?? null] as $postId) {
+                    if ($postId && ! isset($posts[$postId])) {
+                        $ends[] = $postId;
+                    }
+                }
+            }
+        }
+        $posts += $this->store->posts($ends);
 
         // A post found nowhere (deleted under us) is treated like its discussion.
         foreach ($needP as $id => $_) {
@@ -407,6 +421,10 @@ final class Redactor
             if ($hidden) {
                 $resource = $this->hideDiscussion($resource, $resource['attributes']['spoilerShield']);
             } else {
+                // Readable, but its first or last post isn't: other extensions' excerpts of them go.
+                if ($mark && ($c['verdict']->postHidden((int) ($mark['first'] ?? 0)) || $c['verdict']->postHidden((int) ($mark['last'] ?? 0)))) {
+                    $resource['attributes'] = $this->strip($resource['attributes'] ?? [], [...self::DISCUSSION_KEEP, 'title', 'slug', 'spoilerShield']);
+                }
                 $resource['attributes'] = $this->unlinkHidden($resource['attributes'] ?? [], $c);
             }
         } elseif ($type === 'posts') {

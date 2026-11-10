@@ -377,6 +377,20 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function another_extensions_excerpt_of_a_hidden_last_reply_goes(): void
+    {
+        // Like the Cascade theme's "last reply" excerpt, on a discussion the reader may open.
+        $this->extend((new Extend\ApiResource(\Flarum\Api\Resource\DiscussionResource::class))->fields(fn () => [
+            \Flarum\Api\Schema\Str::make('themeLastReply')->get(fn ($d) => (string) Post::query()->where('discussion_id', $d->id)->where('type', 'comment')->orderByDesc('number')->value('content')),
+        ]));
+
+        [, $doc, $raw] = $this->api('GET', '/api/discussions', 3);
+        $this->assertStringNotContainsString(self::REPLY, $raw);
+        $this->assertSame('Opening chapters chat', collect($doc['data'])->firstWhere('id', '2')['attributes']['title'], 'the discussion itself stays readable');
+        $this->assertStringContainsString(self::REPLY, $this->api('GET', '/api/discussions', 4)[2]);
+    }
+
+    #[Test]
     public function another_extensions_email_driver_is_wrapped_not_replaced(): void
     {
         // Like Courier: an extension that puts its own email driver in core's place.

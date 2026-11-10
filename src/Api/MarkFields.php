@@ -25,6 +25,8 @@ final class MarkFields
                     $d->spoiler_position === null ? null : (int) $d->spoiler_position,
                     $d->spoiler_label,
                     $d->user_id === null ? null : (int) $d->user_id,
+                    $d->first_post_id === null ? null : (int) $d->first_post_id,
+                    $d->last_post_id === null ? null : (int) $d->last_post_id,
                 ]),
             Schema\Arr::make(MarkWriter::ATTRIBUTE)
                 ->hidden()
