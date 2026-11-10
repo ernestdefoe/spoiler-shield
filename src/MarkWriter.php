@@ -158,6 +158,25 @@ final class MarkWriter
     }
 
     /**
+     * fof/split moves posts with one bulk UPDATE (no model events): those without a stamp of
+     * their own take the original discussion's work and place, in one UPDATE.
+     *
+     * @param \FoF\Split\Events\DiscussionWasSplit $event
+     */
+    public function split(object $event): void
+    {
+        $original = $event->originalDiscussion;
+        if ($original->spoiler_work === null || $original->spoiler_position === null) {
+            return;
+        }
+
+        $this->db->table('posts')
+            ->whereIn('id', $event->posts->pluck('id')->all())
+            ->whereNull('spoiler_position')
+            ->update(['spoiler_work' => $original->spoiler_work, 'spoiler_position' => (int) $original->spoiler_position, 'spoiler_label' => $original->spoiler_label]);
+    }
+
+    /**
      * A post moved to another discussion (fof/merge-discussions, a split) carries its source
      * discussion's place with it, unless it has its own.
      */

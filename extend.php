@@ -93,6 +93,10 @@ return [
         ->whenExtensionEnabled('flarum-gdpr', fn () => [
             (new \Flarum\Gdpr\Extend\UserData())->addType(\ErnestDefoe\SpoilerShield\Gdpr\SpoilerData::class),
         ])
+        // fof/split moves posts with a bulk UPDATE, past the models' saving hooks.
+        ->whenExtensionEnabled('fof-split', fn () => [
+            (new Extend\Event())->listen('FoF\\Split\\Events\\DiscussionWasSplit', [MarkWriter::class, 'split']),
+        ])
         ->whenExtensionEnabled('flarum-tags', fn () => [
             (new Extend\Event())->listen(DiscussionWasTagged::class, fn (DiscussionWasTagged $event) => resolve(MarkWriter::class)->retagged($event->discussion)),
         ]),

@@ -404,6 +404,25 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function replies_split_off_with_fof_split_keep_their_discussions_place(): void
+    {
+        $this->extension('fof-split');
+        $this->app();
+        $quiet = 'Kael was always going to break the oath';
+        $this->database()->table('posts')->insert(['id' => 7, 'discussion_id' => 1, 'number' => 2, 'user_id' => 5, 'type' => 'comment', 'created_at' => Carbon::now()->subHour(), 'content' => '<t><p>'.$quiet.'</p></t>']);
+        $this->database()->table('discussions')->where('id', 1)->update(['comment_count' => 2, 'last_post_number' => 2, 'last_post_id' => 7]);
+
+        // The real split (a bulk UPDATE of discussion_id, no model events).
+        [$status] = $this->api('POST', '/api/split', 1, ['title' => 'Split off', 'start_post_id' => 7, 'end_post_number' => 2]);
+        $this->assertLessThan(300, $status);
+
+        $post = Post::query()->find(7);
+        $this->assertNotSame(1, (int) $post->discussion_id, 'moved');
+        $this->assertSame(['w:1', 4], [$post->spoiler_work, (int) $post->spoiler_position]);
+        $this->assertStringNotContainsString($quiet, $this->api('GET', '/api/posts/7', 3)[2]);
+    }
+
+    #[Test]
     public function unmarking_a_discussion_keeps_its_stamped_replies_hidden(): void
     {
         $this->api('PATCH', '/api/discussions/2', 1, ['data' => ['type' => 'discussions', 'id' => '2', 'attributes' => ['spoilerShield' => null]]]);

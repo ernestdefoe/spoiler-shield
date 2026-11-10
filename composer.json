@@ -60,7 +60,8 @@
                 "ernestdefoe/anthology",
                 "ernestdefoe/curio",
                 "flarum/realtime",
-                "flarum/gdpr"
+                "flarum/gdpr",
+                "fof/split"
             ]
         }
     },
@@ -73,7 +74,8 @@
         "flarum/phpstan": "^2.0",
         "flarum/realtime": "^2.0",
         "flarum/tags": "^2.0",
-        "flarum/testing": "^2.0"
+        "flarum/testing": "^2.0",
+        "fof/split": "^2.0"
     },
     "scripts": {
         "test": [
