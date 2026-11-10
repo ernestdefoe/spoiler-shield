@@ -388,8 +388,11 @@ final class Redactor
             }
         }
         foreach ($posts as $id => $p) {
+            // Its place was on that work's ladder: it can't fall back to the discussion's work.
             if (($p['work'] ?? null) !== null && ! $this->integrations->live($p['work'])) {
                 $posts[$id]['work'] = null;
+                $posts[$id]['position'] = null;
+                $posts[$id]['label'] = null;
             }
         }
 

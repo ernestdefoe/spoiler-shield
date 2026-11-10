@@ -135,7 +135,7 @@ final class HiddenFromSearch
         }
 
         $works = array_values(array_unique(array_merge(
-            $this->db->table('discussions')->whereNotNull('spoiler_position')->distinct()->pluck('spoiler_work')->filter()->all(),
+            $this->db->table('discussions')->whereNotNull('spoiler_position')->whereNotNull('spoiler_work')->distinct()->pluck('spoiler_work')->all(),
             $this->db->table('posts')->whereNotNull('spoiler_work')->distinct()->pluck('spoiler_work')->all(),
         )));
         $positions = $this->positions->for($actor, $works);

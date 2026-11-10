@@ -431,6 +431,11 @@ class GateTest extends TestCase
             $this->assertNull($item['attributes']['spoilerShield']);
         }
         $this->assertContains('7', array_column($this->api('GET', '/api/discussions', null, [], ['filter' => ['q' => 'Dragon']])[1]['data'], 'id'));
+
+        // A reply stamped on that switched-off ladder is unmarked too: it doesn't fall back to its
+        // discussion's work with a number from another ladder.
+        $this->database()->table('posts')->where('id', 3)->update(['spoiler_work' => 'mq:1', 'spoiler_position' => 200005]);
+        $this->assertStringContainsString(self::REPLY, $this->api('GET', '/api/posts/3', 3)[2]);
     }
 
     #[Test]
