@@ -68,9 +68,9 @@ final class HiddenFromSearch
         }
 
         $r = $this->rules($actor);
-        $inWorks = fn (array $works) => fn ($sub) => $sub->select('id')->from('discussions')->whereIn('spoiler_work', $works ?: ['']);
 
-        $query->where(function ($w) use ($r, $actor, $inWorks) {
+        // A stamped post carries its own work.
+        $query->where(function ($w) use ($r, $actor) {
             $w->whereNull('posts.spoiler_position');
             if ($actor->exists) {
                 $w->orWhere('posts.user_id', $actor->id);
@@ -78,12 +78,14 @@ final class HiddenFromSearch
             if ($r['revealedP']) {
                 $w->orWhereIn('posts.id', $r['revealedP']);
             }
-            $w->orWhereIn('posts.discussion_id', $inWorks($r['open']));
+            if ($r['open']) {
+                $w->orWhereIn('posts.spoiler_work', $r['open']);
+            }
             foreach ($r['limits'] as $work => $p) {
-                $w->orWhere(fn ($x) => $x->where('posts.spoiler_position', '<=', $p['read'])->whereIn('posts.discussion_id', $inWorks([$work])));
+                $w->orWhere(fn ($x) => $x->where('posts.spoiler_work', $work)->where('posts.spoiler_position', '<=', $p['read']));
             }
             if ($r['unsetShow']) {
-                $w->orWhereIn('posts.discussion_id', fn ($sub) => $sub->select('id')->from('discussions')->whereNotNull('spoiler_work')->whereNotIn('spoiler_work', array_merge(array_keys($r['limits']), $r['open'])));
+                $w->orWhereNotIn('posts.spoiler_work', array_merge(array_keys($r['limits']), $r['open']));
             }
         });
 
@@ -131,7 +133,10 @@ final class HiddenFromSearch
             return self::$rules['value'];
         }
 
-        $works = $this->db->table('discussions')->whereNotNull('spoiler_position')->distinct()->pluck('spoiler_work')->filter()->values()->all();
+        $works = array_values(array_unique(array_merge(
+            $this->db->table('discussions')->whereNotNull('spoiler_position')->distinct()->pluck('spoiler_work')->filter()->all(),
+            $this->db->table('posts')->whereNotNull('spoiler_work')->distinct()->pluck('spoiler_work')->all(),
+        )));
         $positions = $this->positions->for($actor, $works);
 
         $open = $limits = [];

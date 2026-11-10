@@ -38,7 +38,7 @@ final class MarkStore
 
     /**
      * @param int[] $ids
-     * @return array<int, array{discussion: int, position: ?int, label: ?string, user: ?int}>
+     * @return array<int, array{discussion: int, position: ?int, label: ?string, user: ?int, work: ?string}>
      */
     public function posts(array $ids): array
     {
@@ -47,12 +47,13 @@ final class MarkStore
             return $out;
         }
 
-        foreach ($this->db->table('posts')->whereIn('id', array_values(array_unique($ids)))->get(['id', 'discussion_id', 'user_id', 'spoiler_position', 'spoiler_label']) as $row) {
+        foreach ($this->db->table('posts')->whereIn('id', array_values(array_unique($ids)))->get(['id', 'discussion_id', 'user_id', 'spoiler_position', 'spoiler_label', 'spoiler_work']) as $row) {
             $out[(int) $row->id] = [
                 'discussion' => (int) $row->discussion_id,
                 'position' => $row->spoiler_position === null ? null : (int) $row->spoiler_position,
                 'label' => $row->spoiler_label,
                 'user' => $row->user_id === null ? null : (int) $row->user_id,
+                'work' => $row->spoiler_work,
             ];
         }
 

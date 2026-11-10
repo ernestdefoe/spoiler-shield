@@ -150,47 +150,95 @@ final class MarkWriter
             return;
         }
 
-        // The first post is the discussion's own, and shares its mark.
-        if ($discussion->first_post_id === null || (int) $discussion->first_post_id === (int) $post->id) {
-            return;
-        }
-
         $attributes = (array) ($event->data['attributes'] ?? []);
+        $first = $discussion->first_post_id === null || (int) $discussion->first_post_id === (int) $post->id;
+        $work = $discussion->spoiler_work;
         $floor = $discussion->spoiler_position === null ? -1 : (int) $discussion->spoiler_position;
+        $position = $post->spoiler_position === null ? null : (int) $post->spoiler_position;
+        $stampWork = $post->spoiler_work ?? ($position === null ? null : $work);
 
-        if (array_key_exists(self::ATTRIBUTE, $attributes)) {
+        // The first post is the discussion's own, and shares its mark (quotes aside, below).
+        if (! $first && array_key_exists(self::ATTRIBUTE, $attributes)) {
             if ($post->exists) {
                 $event->actor->assertCan('edit', $post);
             }
-            if ($discussion->spoiler_work === null) {
-                return;
+            if ($work !== null) {
+                $value = $attributes[self::ATTRIBUTE];
+                $position = is_array($value) && isset($value['position']) ? (int) $value['position'] : null;
+
+                if ($position !== null) {
+                    $ladder = $this->ladders->get($work) ?? $this->invalid('work');
+                    Ladders::valid($ladder, $position, true) || $this->invalid('position');
+                }
+                $stampWork = $work;
             }
-
-            $value = $attributes[self::ATTRIBUTE];
-            $position = is_array($value) && isset($value['position']) ? (int) $value['position'] : null;
-
-            if ($position !== null) {
-                $ladder = $this->ladders->get($discussion->spoiler_work) ?? $this->invalid('work');
-                Ladders::valid($ladder, $position, true) || $this->invalid('position');
-            }
-
-            // Nothing past the discussion's own position: no mark needed.
-            $position = $position !== null && $position > $floor ? $position : null;
-            $post->spoiler_position = $position;
-            $post->spoiler_label = $position === null ? null : $this->storedLabel($discussion->spoiler_work, $position);
-
-            return;
-        }
-
-        if (! $post->exists && $discussion->spoiler_work !== null && $discussion->spoiler_position !== null
+        } elseif (! $first && ! $post->exists && $work !== null && $discussion->spoiler_position !== null
             && $this->settings->get('ernestdefoe-spoiler-shield.stamp_replies')) {
-            $mine = $this->positions->read($event->actor, $discussion->spoiler_work);
+            $position = $this->positions->read($event->actor, $work);
+            $stampWork = $work;
+        }
 
-            if ($mine !== null && $mine > $floor) {
-                $post->spoiler_position = $mine;
-                $post->spoiler_label = $this->storedLabel($discussion->spoiler_work, $mine);
+        // Nothing past the discussion's own place: no mark needed.
+        if ($stampWork === $work && $position !== null && $position <= $floor) {
+            $position = null;
+        }
+
+        // A quote or a mention republishes what it points at: never below the furthest of those,
+        // wherever it came from (another discussion, another work). On edits too.
+        if (! $post->exists || $post->isDirty('content')) {
+            foreach ($this->quoted($post) as [$quotedWork, $quotedPosition]) {
+                if ($quotedWork === ($stampWork ?? $work)) {
+                    if ($position === null || $quotedPosition > $position) {
+                        $position = $quotedWork === $work && $quotedPosition <= $floor ? $position : $quotedPosition;
+                        $stampWork = $quotedWork;
+                    }
+                } elseif ($position === null || $stampWork === null || $stampWork === $work) {
+                    // Another work's spoiler, quoted here: that one decides (it's the words on the page).
+                    $position = $quotedPosition;
+                    $stampWork = $quotedWork;
+                }
             }
         }
+
+        $post->spoiler_position = $position;
+        $post->spoiler_work = $position === null ? null : $stampWork;
+        $post->spoiler_label = $position === null ? null : $this->storedLabel((string) $stampWork, $position);
+    }
+
+    /**
+     * The places of every post this one quotes or mentions (Flarum writes a
+     * quote as a post mention): each post's own stamp, or its discussion's
+     * place. One query each for the posts and their discussions.
+     *
+     * @return array<int, array{0: string, 1: int}>
+     */
+    private function quoted(CommentPost $post): array
+    {
+        $xml = (string) ($post->getAttributes()['content'] ?? '');
+        if (! str_contains($xml, 'POSTMENTION')) {
+            return [];
+        }
+
+        preg_match_all('/<POSTMENTION\b[^>]*\bid="(\d+)"/', $xml, $m);
+        $ids = array_values(array_unique(array_map('intval', $m[1])));
+        if (! $ids) {
+            return [];
+        }
+
+        $posts = $this->db->table('posts')->whereIn('id', $ids)->get(['id', 'discussion_id', 'spoiler_position', 'spoiler_work']);
+        $discussions = $this->db->table('discussions')->whereIn('id', $posts->pluck('discussion_id')->unique()->all())->get(['id', 'spoiler_work', 'spoiler_position'])->keyBy('id');
+
+        $out = [];
+        foreach ($posts as $quoted) {
+            $d = $discussions[$quoted->discussion_id] ?? null;
+            if ($quoted->spoiler_position !== null) {
+                $out[] = [(string) ($quoted->spoiler_work ?? $d?->spoiler_work), (int) $quoted->spoiler_position];
+            } elseif ($d && $d->spoiler_work !== null && $d->spoiler_position !== null) {
+                $out[] = [(string) $d->spoiler_work, (int) $d->spoiler_position];
+            }
+        }
+
+        return array_values(array_filter($out, fn ($q) => $q[0] !== ''));
     }
 
     /** Only works defined here keep their step's name on the row; the others are made from the number. */

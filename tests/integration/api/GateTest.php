@@ -67,8 +67,8 @@ class GateTest extends TestCase
             Post::class => [
                 ['id' => 1, 'discussion_id' => 1, 'number' => 1, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>'.self::BODY.'</p></t>'],
                 ['id' => 2, 'discussion_id' => 2, 'number' => 1, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>Who else loved the first chapter?</p></t>'],
-                ['id' => 3, 'discussion_id' => 2, 'number' => 2, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>'.self::REPLY.'</p></t>', 'spoiler_position' => 5, 'spoiler_label' => 'Ch 5'],
-                ['id' => 4, 'discussion_id' => 2, 'number' => 3, 'user_id' => 4, 'type' => 'discussionRenamed', 'created_at' => $now, 'content' => json_encode(['Old', self::RENAMED]), 'spoiler_position' => 5, 'spoiler_label' => 'Ch 5'],
+                ['id' => 3, 'discussion_id' => 2, 'number' => 2, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>'.self::REPLY.'</p></t>', 'spoiler_position' => 5, 'spoiler_label' => 'Ch 5', 'spoiler_work' => 'w:1'],
+                ['id' => 4, 'discussion_id' => 2, 'number' => 3, 'user_id' => 4, 'type' => 'discussionRenamed', 'created_at' => $now, 'content' => json_encode(['Old', self::RENAMED]), 'spoiler_position' => 5, 'spoiler_label' => 'Ch 5', 'spoiler_work' => 'w:1'],
                 ['id' => 5, 'discussion_id' => 3, 'number' => 1, 'user_id' => 2, 'type' => 'comment', 'created_at' => $now, 'content' => '<r><p>See <URL url="http://localhost/d/1-ch-4">'.self::TITLE.'</URL></p></r>'],
             ],
             'spoiler_progress' => [
@@ -250,6 +250,35 @@ class GateTest extends TestCase
         $this->api('POST', '/api/posts', 4, ['data' => ['type' => 'posts', 'attributes' => ['content' => 'Welcome, new readers', 'spoilerShield' => null], 'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => '2']]]]]);
         $this->assertNull(Post::query()->where('discussion_id', 2)->orderByDesc('id')->first()->spoiler_position);
         $this->assertStringContainsString('Welcome, new readers', $this->api('GET', '/api/discussions/2', 3)[2]);
+    }
+
+    #[Test]
+    public function quoting_a_spoiler_carries_its_place_even_into_another_discussion(): void
+    {
+        // Una (no place set) quotes Ash's chapter 5 reply into the unmarked book club discussion.
+        [$status] = $this->api('POST', '/api/posts', 5, ['data' => ['type' => 'posts', 'attributes' => ['content' => '@"ash"#p3 '.self::REPLY.', quoted'], 'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => '3']]]]]);
+        $this->assertSame(201, $status);
+
+        $quote = Post::query()->where('discussion_id', 3)->orderByDesc('id')->first();
+        $this->assertSame(['w:1', 5], [$quote->spoiler_work, (int) $quote->spoiler_position]);
+        $this->assertStringNotContainsString(self::REPLY, $this->api('GET', '/api/posts/'.$quote->id, 3)[2], 'Bea is at chapter 2');
+        $this->assertStringContainsString(self::REPLY, $this->api('GET', '/api/posts/'.$quote->id, 4)[2]);
+
+        // Choosing "nothing past" in the composer can't undo a quote.
+        $quote->created_at = Carbon::now()->subHour();
+        $quote->save();
+        $this->api('POST', '/api/posts', 5, ['data' => ['type' => 'posts', 'attributes' => ['content' => '@"ash"#p3 again', 'spoilerShield' => null], 'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => '2']]]]]);
+        $this->assertSame(5, (int) Post::query()->where('discussion_id', 2)->orderByDesc('id')->value('spoiler_position'));
+    }
+
+    #[Test]
+    public function unmarking_a_discussion_keeps_its_stamped_replies_hidden(): void
+    {
+        $this->api('PATCH', '/api/discussions/2', 1, ['data' => ['type' => 'discussions', 'id' => '2', 'attributes' => ['spoilerShield' => null]]]);
+        $this->assertNull(Discussion::query()->find(2)->spoiler_work);
+
+        $this->assertStringNotContainsString(self::REPLY, $this->api('GET', '/api/posts/3', 3)[2]);
+        $this->assertStringContainsString(self::REPLY, $this->api('GET', '/api/posts/3', 4)[2]);
     }
 
     #[Test]

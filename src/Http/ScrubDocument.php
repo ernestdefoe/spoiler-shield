@@ -117,15 +117,15 @@ class ScrubDocument
      */
     private function replyHidden(User $actor, ?Session $session, int $id, array $discussion): bool
     {
-        $furthest = $this->db->table('posts')->where('discussion_id', $id)
+        $furthest = $this->db->table('posts')->where('discussion_id', $id)->whereNotNull('spoiler_position')
             ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', (int) $actor->id))
-            ->max('spoiler_position');
+            ->orderByDesc('spoiler_position')->first(['spoiler_position', 'spoiler_work']);
 
-        if ($furthest === null) {
+        if (! $furthest) {
             return false;
         }
 
-        $verdict = $this->gate->check($actor, $session, [$id => $discussion], [0 => ['discussion' => $id, 'position' => (int) $furthest, 'user' => null]]);
+        $verdict = $this->gate->check($actor, $session, [$id => $discussion], [0 => ['discussion' => $id, 'position' => (int) $furthest->spoiler_position, 'user' => null, 'work' => $furthest->spoiler_work]]);
 
         return $verdict->postHidden(0);
     }

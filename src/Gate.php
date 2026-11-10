@@ -32,11 +32,11 @@ final class Gate
 
     /**
      * @param array<int, array{work: ?string, position: ?int, user: ?int}> $discussions
-     * @param array<int, array{discussion: int, position: ?int, user: ?int}> $posts
+     * @param array<int, array{discussion: int, position: ?int, user: ?int, work?: ?string}> $posts
      */
     public function check(User $actor, ?Session $session, array $discussions, array $posts): Verdict
     {
-        $works = $this->works($discussions);
+        $works = $this->works($discussions, $posts);
         if (! $works) {
             return new Verdict();
         }
@@ -52,12 +52,12 @@ final class Gate
      *
      * @param User[] $users
      * @param array<int, array{work: ?string, position: ?int, user: ?int}> $discussions
-     * @param array<int, array{discussion: int, position: ?int, user: ?int}> $posts
+     * @param array<int, array{discussion: int, position: ?int, user: ?int, work?: ?string}> $posts
      * @return array<int, Verdict> by user id
      */
     public function checkMany(array $users, array $discussions, array $posts): array
     {
-        $works = $this->works($discussions);
+        $works = $this->works($discussions, $posts);
         $ids = array_map(fn (User $u) => (int) $u->id, $users);
         $positions = $works ? $this->positions->forMany($ids, $works) : [];
 
@@ -80,14 +80,15 @@ final class Gate
 
     /**
      * @param array<int, array{work: ?string, position: ?int, user: ?int}> $discussions
+     * @param array<int, array{discussion: int, position: ?int, user: ?int, work?: ?string}> $posts
      * @return string[]
      */
-    private function works(array $discussions): array
+    private function works(array $discussions, array $posts = []): array
     {
         $works = [];
-        foreach ($discussions as $d) {
-            if ($d['work'] !== null) {
-                $works[$d['work']] = true;
+        foreach ([...$discussions, ...$posts] as $item) {
+            if (($item['work'] ?? null) !== null) {
+                $works[$item['work']] = true;
             }
         }
 
@@ -99,7 +100,7 @@ final class Gate
      * @param array<int, true> $revealedD
      * @param array<int, true> $revealedP
      * @param array<int, array{work: ?string, position: ?int, user: ?int}> $discussions
-     * @param array<int, array{discussion: int, position: ?int, user: ?int}> $posts
+     * @param array<int, array{discussion: int, position: ?int, user: ?int, work?: ?string}> $posts
      */
     private function decide(User $actor, array $positions, array $revealedD, array $revealedP, array $discussions, array $posts): Verdict
     {
@@ -124,19 +125,22 @@ final class Gate
 
         foreach ($posts as $id => $p) {
             $d = $discussions[$p['discussion']] ?? null;
+            // A stamp carries its own work; an older one, or a post never stamped, goes with its discussion's.
+            $work = ($p['work'] ?? null) ?? ($d['work'] ?? null);
 
-            if (! $d || $d['work'] === null) {
+            if ($work === null) {
                 continue;
             }
 
             $mine = $actor->exists && $p['user'] === (int) $actor->id;
-            $read = $positions[$d['work']]['read'] ?? $unset;
+            $read = $positions[$work]['read'] ?? $unset;
 
             if (isset($verdict->hiddenDiscussions[$p['discussion']])) {
                 $hidden = true;
             } else {
-                // Inside a discussion you may read, its own position is safe too.
-                $hidden = $p['position'] !== null && $p['position'] > max($read, $d['position'] ?? -1);
+                // Inside a discussion you may read, its own position is safe too (same work only).
+                $floor = $d !== null && $d['work'] === $work ? ($d['position'] ?? -1) : -1;
+                $hidden = $p['position'] !== null && $p['position'] > max($read, $floor);
             }
 
             if ($hidden && ! $mine) {

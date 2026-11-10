@@ -60,7 +60,7 @@ final class Redactor
 
         $verdict = $this->gate->check($actor, $session, $discussions, $posts);
 
-        $workKeys = array_values(array_unique(array_filter(array_column($discussions, 'work'))));
+        $workKeys = array_values(array_unique(array_filter(array_merge(array_column($discussions, 'work'), array_column($posts, 'work')))));
         $works = $workKeys ? $this->works->describe($workKeys) : [];
         $offers = $verdict->anythingHidden() ? $this->works->inCollection($actor, $works) : [];
 
@@ -321,7 +321,7 @@ final class Redactor
      * discussion isn't included): one query each for discussions and posts.
      *
      * @param array<int, array<string, mixed>> $resources
-     * @return array{0: array<int, array{work: ?string, position: ?int, label: ?string, user: ?int, first?: ?int, last?: ?int}>, 1: array<int, array{discussion: int, position: ?int, label: ?string, user: ?int}>}
+     * @return array{0: array<int, array{work: ?string, position: ?int, label: ?string, user: ?int, first?: ?int, last?: ?int}>, 1: array<int, array{discussion: int, position: ?int, label: ?string, user: ?int, work: ?string}>}
      */
     private function marks(array $resources): array
     {
@@ -343,7 +343,7 @@ final class Redactor
                 }
             } elseif (($resource['type'] ?? '') === 'posts') {
                 if (is_array($mark)) {
-                    $posts[$id] = ['discussion' => $mark[3], 'position' => $mark[0], 'label' => $mark[1], 'user' => $mark[2]];
+                    $posts[$id] = ['discussion' => $mark[3], 'position' => $mark[0], 'label' => $mark[1], 'user' => $mark[2], 'work' => $mark[4] ?? null];
                     $needD[$mark[3]] = true;
                 } else {
                     $needP[$id] = true;
@@ -380,7 +380,7 @@ final class Redactor
 
         // A post found nowhere (deleted under us) is treated like its discussion.
         foreach ($needP as $id => $_) {
-            $posts[$id] ??= ['discussion' => 0, 'position' => null, 'label' => null, 'user' => null];
+            $posts[$id] ??= ['discussion' => 0, 'position' => null, 'label' => null, 'user' => null, 'work' => null];
         }
 
         return [$discussions, $posts];
@@ -450,11 +450,14 @@ final class Redactor
             $discussion = $mark ? ($c['discussions'][$mark['discussion']] ?? null) : null;
             $hidden = $c['verdict']->postHidden($id);
 
-            if ($mark && $discussion && $discussion['work'] !== null && ($mark['position'] !== null || $hidden)) {
+            // A stamped post carries its own work (a quote can bring another work's spoiler in).
+            $postWork = $mark['work'] ?? null;
+            $postWork ??= $discussion['work'] ?? null;
+            if ($mark && $postWork !== null && ($mark['position'] !== null || $hidden)) {
                 // A post hidden with its discussion shows the discussion's mark.
                 $own = $mark['position'] !== null && ! $c['verdict']->discussionHidden($mark['discussion']);
                 $resource['attributes']['spoilerShield'] = $this->describe(
-                    $discussion['work'],
+                    $own ? $postWork : (string) $discussion['work'],
                     $own ? $mark['position'] : $discussion['position'],
                     $own ? $mark['label'] : $discussion['label'],
                     $hidden,

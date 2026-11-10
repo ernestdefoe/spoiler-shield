@@ -46,6 +46,7 @@ final class MarkFields
                     $p->spoiler_label,
                     $p->user_id === null ? null : (int) $p->user_id,
                     (int) $p->discussion_id,
+                    $p->spoiler_work,
                 ]),
             Schema\Arr::make(MarkWriter::ATTRIBUTE)
                 ->hidden()
