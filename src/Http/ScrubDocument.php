@@ -87,28 +87,38 @@ class ScrubDocument
         }
 
         // A hidden discussion's own title, wherever it turns up as text: a description taken
-        // from a post that links to it, a link's words.
-        $titles = [];
+        // from a post that links to it, a link's words. Two maps: plain text (meta values and
+        // the title, escaped later by the page) and HTML (always the escaped placeholder, as
+        // a work's name is a member's words).
+        $text = $html = [];
         foreach ($this->db->table('discussions')->whereIn('id', array_keys($verdict->hiddenDiscussions))->pluck('title', 'id') as $id => $title) {
             if (mb_strlen((string) $title) >= 4) {
-                $text = $placeholder((int) $id);
-                $titles[(string) $title] = $text;
-                $titles[e((string) $title)] = e($text);
-                $titles[htmlspecialchars((string) $title, ENT_QUOTES | ENT_HTML5)] = e($text);
+                $words = $placeholder((int) $id);
+                $text[(string) $title] = $words;
+                foreach ([(string) $title, e((string) $title), htmlspecialchars((string) $title, ENT_QUOTES | ENT_HTML5)] as $form) {
+                    $html[$form] = e($words);
+                }
             }
         }
 
-        $rewrite = fn (string $html) => strtr((string) preg_replace_callback(
+        // In HTML, only text between tags and attribute values change, never the markup itself.
+        $inText = fn (string $markup) => $html ? (string) preg_replace_callback(
+            '#(>[^<]+<)|(="[^"]*")#',
+            fn ($m) => strtr($m[0], $html),
+            $markup
+        ) : $markup;
+
+        $rewrite = fn (string $markup) => $inText((string) preg_replace_callback(
             '#(<a\b[^>]*\bhref="[^"]*/d/(\d+)[^"]*"[^>]*>)(.*?)(</a>)#is',
             fn ($m) => $verdict->discussionHidden((int) $m[2]) ? $m[1].e($placeholder((int) $m[2])).$m[4] : $m[0],
-            $html
-        ), $titles);
+            $markup
+        ));
 
         $document->content = $rewrite((string) $document->content);
         $document->head = array_map(fn ($tag) => $rewrite((string) $tag), $document->head);
-        $document->meta = array_map(fn ($value) => is_string($value) ? strtr($value, $titles) : $value, $document->meta);
+        $document->meta = array_map(fn ($value) => is_string($value) ? strtr($value, $text) : $value, $document->meta);
         if (is_string($document->title)) {
-            $document->title = strtr($document->title, $titles);
+            $document->title = strtr($document->title, $text);
         }
     }
 }
