@@ -7,6 +7,9 @@ ernestdefoe-spoiler-shield:
     finished: Finished
     season: "Season {number}"
     chapter: "Chapter {number}"
+    gdpr:
+      export: "Where you're up to in each book, show and game, and the spoilers you chose to reveal."
+      delete: "Your places and reveals are deleted. Books, shows and games you added stay, without your name."
 
   api:
     invalid_work: "That book, show or game doesn't exist."

@@ -209,6 +209,21 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function gdpr_exports_and_erases_a_members_places_and_reveals(): void
+    {
+        $this->api('POST', '/api/spoiler-shield/reveals', 3, ['type' => 'discussions', 'id' => 1]);
+        $data = $this->app()->getContainer()->make(\ErnestDefoe\SpoilerShield\Gdpr\SpoilerData::class, ['user' => User::query()->find(3), 'erasureRequest' => null]);
+
+        $export = json_encode($data->export());
+        $this->assertStringContainsString('w:1', $export);
+        $this->assertStringContainsString('item_id', $export);
+
+        $data->delete();
+        $this->assertSame(0, $this->database()->table('spoiler_progress')->where('user_id', 3)->count());
+        $this->assertSame(0, $this->database()->table('spoiler_reveals')->where('user_id', 3)->count());
+    }
+
+    #[Test]
     public function the_author_always_sees_their_own(): void
     {
         $this->app();

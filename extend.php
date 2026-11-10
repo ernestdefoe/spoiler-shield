@@ -90,6 +90,9 @@ return [
         ->listen(PostSaving::class, [MarkWriter::class, 'postSaving']),
 
     (new Extend\Conditional())
+        ->whenExtensionEnabled('flarum-gdpr', fn () => [
+            (new \Flarum\Gdpr\Extend\UserData())->addType(\ErnestDefoe\SpoilerShield\Gdpr\SpoilerData::class),
+        ])
         ->whenExtensionEnabled('flarum-tags', fn () => [
             (new Extend\Event())->listen(DiscussionWasTagged::class, fn (DiscussionWasTagged $event) => resolve(MarkWriter::class)->retagged($event->discussion)),
         ]),
