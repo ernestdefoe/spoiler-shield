@@ -344,27 +344,51 @@ class GateTest extends TestCase
     }
 
     #[Test]
-    public function a_works_name_is_escaped_where_the_page_head_is_rewritten(): void
+    public function a_page_linking_to_a_hidden_discussion_loses_its_descriptions_and_the_link_is_escaped(): void
     {
-        // Another extension printing discussion titles into the head of every page.
-        $this->extend((new Extend\Frontend('forum'))->content(function (Document $document) {
-            foreach (Discussion::query()->pluck('title') as $title) {
-                $document->head[] = '<meta name="x-titles" content="'.e($title).'">';
-                $document->head[] = '<script type="application/ld+json">'.json_encode(['name' => $title]).'</script>';
-            }
-        }));
-
         $this->app();
         // The harness doesn't load extension locales; the placeholder must carry the work's name here.
         $this->app()->getContainer()->make(LocaleManager::class)->addTranslations('en', __DIR__.'/../../../locale/en.yml');
         $now = Carbon::now()->subHour();
         $this->database()->table('spoiler_works')->insert(['id' => 2, 'title' => '<img src=x onerror=alert(1)>', 'kind' => 'book', 'steps' => json_encode(['One', 'Two']), 'created_at' => $now, 'updated_at' => $now]);
         $this->database()->table('discussions')->where('id', 1)->update(['title' => "Kael's betrayal of the guild", 'spoiler_work' => 'w:2', 'spoiler_position' => 2, 'spoiler_label' => 'Two']);
+        $this->database()->table('posts')->where('id', 5)->update(['content' => '<r><p>See <URL url="http://localhost/d/1-two">Kael\'s betrayal of the guild</URL></p></r>']);
 
-        $raw = $this->api('GET', '/', 3)[2];
+        // /d/3 is readable; its first post links to the hidden /d/1, and the fake SEO extension describes it from that post.
+        $raw = $this->api('GET', '/d/3', 3)[2];
         $this->assertStringNotContainsString('<img src=x', $raw);
         $this->assertStringNotContainsString('betrayal of the guild', $raw);
-        $this->assertStringContainsString('content="Spoiler for Two (&lt;img src=x onerror=alert(1)&gt;)"', $raw);
+        $this->assertStringNotContainsString('og:description', $raw, 'descriptions go whole');
+        $this->assertStringNotContainsString('application/ld+json', $raw);
+        $this->assertStringContainsString('Spoiler for Two (&lt;img src=x onerror=alert(1)&gt;)', $raw);
+    }
+
+    #[Test]
+    public function a_readable_discussion_page_loses_descriptions_when_a_reply_in_it_is_hidden(): void
+    {
+        // Like fof/seo's post crawler: the page's JSON-LD and description carry every reply.
+        $this->extend((new Extend\Frontend('forum'))->content(function (Document $document, ServerRequestInterface $request) {
+            if ($request->getAttribute('routeName') === 'discussion') {
+                $text = Post::query()->where('discussion_id', (int) $request->getAttribute('routeParameters')['id'])->where('type', 'comment')->pluck('content')->implode(' ');
+                $document->head[] = '<script type="application/ld+json">'.json_encode(['comment' => strip_tags($text)]).'</script>';
+                $document->meta['description'] = strip_tags($text);
+            }
+        }));
+
+        $this->assertStringNotContainsString(self::REPLY, $this->api('GET', '/d/2', 3)[2]);
+        $this->assertStringContainsString(self::REPLY, $this->api('GET', '/d/2', 4)[2], 'Ash may read them all');
+    }
+
+    #[Test]
+    public function a_members_own_words_are_never_rewritten_so_nothing_confirms_a_guess(): void
+    {
+        $this->extend((new Extend\Routes('api'))->get('/test-widgets', 'test.widgets', WidgetController::class));
+        $this->app();
+        $now = Carbon::now()->subHour();
+        $this->database()->table('discussions')->insert(['id' => 9, 'title' => 'Is it true Kael betrays the guild?', 'slug' => 'guess', 'user_id' => 3, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 0]);
+
+        $raw = $this->api('GET', '/api/test-widgets', 3)[2];
+        $this->assertStringContainsString('Is it true Kael betrays the guild?', $raw, 'her guess comes back exactly as she wrote it');
     }
 
     #[Test]

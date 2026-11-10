@@ -209,20 +209,32 @@ final class Redactor
 
         $doc = $replace($doc);
 
-        // The hidden title quoted as plain text elsewhere (another discussion's excerpt of a post linking to it).
-        $titles = [];
-        foreach ($this->store->titles(array_keys($verdict->hiddenDiscussions)) as $id => $title) {
-            if (mb_strlen($title) >= 4) {
-                $d = $discussions[$id];
-                $titles[$title] = $this->placeholder(['label' => $this->labels->for((string) $d['work'], (int) $d['position'], $d['label']), 'title' => $works[$d['work']]['title'] ?? '']);
+        // A listed discussion whose own posts link to a hidden one: its excerpt may quote that
+        // link's words. Decided by the links, never by matching words (that would test a guess).
+        $visible = array_diff_key($ids, $verdict->hiddenDiscussions);
+        $quoting = [];
+        foreach ($this->store->linksFromEnds(array_keys($visible)) as $id => $linked) {
+            if (array_intersect_key(array_flip($linked), $verdict->hiddenDiscussions)) {
+                $quoting[$id] = true;
             }
         }
-        if ($titles) {
-            array_walk_recursive($doc, function (&$value) use ($titles) {
-                if (is_string($value)) {
-                    $value = strtr($value, $titles);
+        if ($quoting) {
+            $blank = function ($node) use (&$blank, $quoting) {
+                if (! is_array($node)) {
+                    return $node;
                 }
-            });
+                $id = $this->linkedId($node);
+                if ($id !== null && isset($quoting[$id])) {
+                    foreach (self::LINK_TEXT_KEYS as $key) {
+                        if (array_key_exists($key, $node)) {
+                            $node[$key] = null;
+                        }
+                    }
+                }
+
+                return array_map($blank, $node);
+            };
+            $doc = $blank($doc);
         }
 
         return $doc;

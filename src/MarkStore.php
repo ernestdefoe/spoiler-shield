@@ -60,11 +60,29 @@ final class MarkStore
     }
 
     /**
+     * The discussions each discussion's first and last posts link to (/d/{id} in their stored content). One query.
+     *
      * @param int[] $ids
-     * @return array<int, string>
+     * @return array<int, int[]>
      */
-    public function titles(array $ids): array
+    public function linksFromEnds(array $ids): array
     {
-        return $ids ? $this->db->table('discussions')->whereIn('id', $ids)->pluck('title', 'id')->map(fn ($t) => (string) $t)->all() : [];
+        if (! $ids) {
+            return [];
+        }
+
+        $rows = $this->db->table('posts')
+            ->join('discussions', fn ($j) => $j->on('discussions.first_post_id', '=', 'posts.id')->orOn('discussions.last_post_id', '=', 'posts.id'))
+            ->whereIn('discussions.id', $ids)
+            ->where('posts.content', 'like', '%/d/%')
+            ->get(['discussions.id', 'posts.content']);
+
+        $out = [];
+        foreach ($rows as $row) {
+            preg_match_all('#/d/(\d+)#', (string) $row->content, $m);
+            $out[(int) $row->id] = array_merge($out[(int) $row->id] ?? [], array_map('intval', $m[1]));
+        }
+
+        return $out;
     }
 }
