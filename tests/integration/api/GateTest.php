@@ -7,6 +7,7 @@ use ErnestDefoe\SpoilerShield\Marks;
 use Flarum\Discussion\Discussion;
 use Flarum\Extend;
 use Flarum\Frontend\Document;
+use Flarum\Locale\LocaleManager;
 use Flarum\Notification\NotificationMailer;
 use Flarum\Notification\NotificationSyncer;
 use Flarum\Post\Post;
@@ -320,5 +321,39 @@ class GateTest extends TestCase
 
         $found = $this->api('GET', '/api/spoiler-shield/works', 3, [], ['q' => 'night'])[1]['data'];
         $this->assertSame('Night Shift', $found[0]['title']);
+    }
+
+    #[Test]
+    public function a_search_does_not_confirm_a_guess(): void
+    {
+        $ids = fn (?int $as) => array_column($this->api('GET', '/api/discussions', $as, [], ['filter' => ['q' => 'Kael']])[1]['data'], 'id');
+
+        $this->assertNotContains('1', $ids(3), 'behind: not even a blurred hit');
+        $this->assertNotContains('1', $ids(null));
+        $this->assertContains('1', $ids(4));
+    }
+
+    #[Test]
+    public function a_works_name_is_escaped_where_the_page_head_is_rewritten(): void
+    {
+        // Another extension printing discussion titles into the head of every page.
+        $this->extend((new Extend\Frontend('forum'))->content(function (Document $document) {
+            foreach (Discussion::query()->pluck('title') as $title) {
+                $document->head[] = '<meta name="x-titles" content="'.e($title).'">';
+                $document->head[] = '<script type="application/ld+json">'.json_encode(['name' => $title]).'</script>';
+            }
+        }));
+
+        $this->app();
+        // The harness doesn't load extension locales; the placeholder must carry the work's name here.
+        $this->app()->getContainer()->make(LocaleManager::class)->addTranslations('en', __DIR__.'/../../../locale/en.yml');
+        $now = Carbon::now()->subHour();
+        $this->database()->table('spoiler_works')->insert(['id' => 2, 'title' => '<img src=x onerror=alert(1)>', 'kind' => 'book', 'steps' => json_encode(['One', 'Two']), 'created_at' => $now, 'updated_at' => $now]);
+        $this->database()->table('discussions')->where('id', 1)->update(['title' => "Kael's betrayal of the guild", 'spoiler_work' => 'w:2', 'spoiler_position' => 2, 'spoiler_label' => 'Two']);
+
+        $raw = $this->api('GET', '/', 3)[2];
+        $this->assertStringNotContainsString('<img src=x', $raw);
+        $this->assertStringNotContainsString('betrayal of the guild', $raw);
+        $this->assertStringContainsString('content="Spoiler for Two (&lt;img src=x onerror=alert(1)&gt;)"', $raw);
     }
 }
