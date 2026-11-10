@@ -127,9 +127,20 @@ class WorksController implements RequestHandlerInterface
         if ($catalog !== '' && ! preg_match('/^[a-z][a-z0-9-]{1,29}:[A-Za-z0-9._-]{1,80}$/', $catalog)) {
             return Json::error(422, 'invalid_catalog');
         }
-        // Positions are places in the list: a step already in use can't disappear.
-        if ($work && count($steps) < $this->highestInUse($work)) {
-            return Json::error(422, 'steps_in_use');
+        // Positions are places in the list: a step already in use can't disappear or move
+        // (renaming one is fine; so is adding to the end).
+        if ($work) {
+            $inUse = $this->highestInUse($work);
+            $before = Ladders::steps($work->steps);
+            if (count($steps) < $inUse) {
+                return Json::error(422, 'steps_in_use');
+            }
+            for ($i = 0; $i < $inUse; $i++) {
+                $moved = array_search($steps[$i], $before, true);
+                if ($steps[$i] !== ($before[$i] ?? null) && $moved !== false && $moved !== $i) {
+                    return Json::error(422, 'steps_reordered');
+                }
+            }
         }
 
         $before = $work ? Ladders::steps($work->steps) : [];
@@ -144,8 +155,7 @@ class WorksController implements RequestHandlerInterface
         foreach ($steps as $i => $label) {
             if (isset($before[$i]) && $before[$i] !== $label) {
                 $this->db->table('discussions')->where('spoiler_work', 'w:'.$work->id)->where('spoiler_position', $i + 1)->update(['spoiler_label' => $label]);
-                $this->db->table('posts')->whereIn('discussion_id', fn ($q) => $q->select('id')->from('discussions')->where('spoiler_work', 'w:'.$work->id))
-                    ->where('spoiler_position', $i + 1)->update(['spoiler_label' => $label]);
+                $this->db->table('posts')->where('spoiler_work', 'w:'.$work->id)->where('spoiler_position', $i + 1)->update(['spoiler_label' => $label]);
             }
         }
 
@@ -171,11 +181,17 @@ class WorksController implements RequestHandlerInterface
 
         $key = 'w:'.$work->id;
 
+        // A work in use carries everyone's marks and places: only a moderator may take it away.
+        if (! $actor->hasPermission('spoiler-shield.manageWorks') && $this->inUse($key)) {
+            return Json::error(403, 'work_in_use');
+        }
+
         // Through the model, so each slug goes back to its title.
         Discussion::query()->where('spoiler_work', $key)->each(function (Discussion $d) {
             $d->spoiler_work = $d->spoiler_position = $d->spoiler_label = null;
             $d->save();
         });
+        $this->db->table('posts')->where('spoiler_work', $key)->update(['spoiler_work' => null, 'spoiler_position' => null, 'spoiler_label' => null]);
         $this->db->table('spoiler_progress')->where('work', $key)->delete();
         $work->delete();
 
@@ -188,6 +204,13 @@ class WorksController implements RequestHandlerInterface
             || ($actor->exists && (int) $work->user_id === (int) $actor->id && $actor->hasPermission('spoiler-shield.createWorks'));
     }
 
+    private function inUse(string $key): bool
+    {
+        return $this->db->table('discussions')->where('spoiler_work', $key)->exists()
+            || $this->db->table('posts')->where('spoiler_work', $key)->exists()
+            || $this->db->table('spoiler_progress')->where('work', $key)->exists();
+    }
+
     private function highestInUse(Work $work): int
     {
         $key = 'w:'.$work->id;
@@ -195,7 +218,7 @@ class WorksController implements RequestHandlerInterface
 
         return (int) max(
             $this->db->table('discussions')->where('spoiler_work', $key)->where($below)->max('spoiler_position'),
-            $this->db->table('posts')->whereIn('discussion_id', fn ($q) => $q->select('id')->from('discussions')->where('spoiler_work', $key))->where($below)->max('spoiler_position'),
+            $this->db->table('posts')->where('spoiler_work', $key)->where($below)->max('spoiler_position'),
             $this->db->table('spoiler_progress')->where('work', $key)->where('position', '<', Marks::FINISHED)->max('position'),
         );
     }

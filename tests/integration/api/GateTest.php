@@ -350,6 +350,14 @@ class GateTest extends TestCase
 
         $found = $this->api('GET', '/api/spoiler-shield/works', 3, [], ['q' => 'night'])[1]['data'];
         $this->assertSame('Night Shift', $found[0]['title']);
+
+        // Once in use (Bea is at "Episode 2"), the owner can rename and append, nothing else.
+        $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => "w:$id", 'position' => 2]);
+        $this->assertSame(422, $this->api('PATCH', "/api/spoiler-shield/works/$id", 2, ['title' => 'Night Shift', 'steps' => ['Episode 2', 'Pilot', 'Episode 3']])[0], 'no reordering');
+        $this->assertSame(422, $this->api('PATCH', "/api/spoiler-shield/works/$id", 2, ['title' => 'Night Shift', 'steps' => ['Pilot']])[0], 'no removing');
+        $this->assertSame(200, $this->api('PATCH', "/api/spoiler-shield/works/$id", 2, ['title' => 'Night Shift', 'steps' => ['The pilot', 'Episode 2', 'Episode 3', 'Episode 4']])[0], 'rename + append');
+        $this->assertSame(403, $this->api('DELETE', "/api/spoiler-shield/works/$id", 2)[0], 'the owner may not delete it now');
+        $this->assertSame(204, $this->api('DELETE', "/api/spoiler-shield/works/$id", 1)[0], 'a moderator may');
     }
 
     #[Test]

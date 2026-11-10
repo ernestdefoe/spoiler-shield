@@ -168,8 +168,16 @@ export default class WorkModal extends FormModal<Attrs> {
   async remove() {
     if (!confirm(String(t('work.delete_confirm')))) return;
     this.loading = true;
-    await api('DELETE', '/works/' + this.attrs.work.work.slice(2));
-    this.hide();
-    this.attrs.ondelete?.();
+    this.error = '';
+    try {
+      await api('DELETE', '/works/' + this.attrs.work.work.slice(2));
+      this.hide();
+      this.attrs.ondelete?.();
+    } catch (error: any) {
+      this.error = String(t('work.error.' + (error?.response?.errors?.[0]?.code || 'unknown')));
+    } finally {
+      this.loading = false;
+      m.redraw();
+    }
   }
 }

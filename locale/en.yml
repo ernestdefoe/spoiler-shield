@@ -114,6 +114,8 @@ ernestdefoe-spoiler-shield:
         invalid_steps: "Add at least one part (up to 500)."
         invalid_catalog: "The collection match looks like source:id, for example openlibrary:OL45883W."
         steps_in_use: "A part that discussions or members already use can't be taken away."
+        steps_reordered: "Parts already in use can't change places. Rename them, or add new ones at the end."
+        work_in_use: "Discussions and members already use this one, so only a moderator can delete it."
         permission_denied: "You can't change this one."
         unknown: "That didn't save. Try again."
 
