@@ -99,8 +99,8 @@ final class Ladders
     {
         if ($ladder['type'] === 'episodes') {
             foreach ($ladder['seasons'] as $season) {
-                if ($season['number'] === intdiv($position, 1000) && $season['episodes'] === $position % 1000) {
-                    return $season['number'] * 1000 + Marks::SEASON_END;
+                if ($season['number'] === intdiv($position, Marks::SEASON) && $season['episodes'] === $position % Marks::SEASON) {
+                    return $season['number'] * Marks::SEASON + Marks::SEASON_END;
                 }
             }
         }
@@ -119,10 +119,10 @@ final class Ladders
     /** @param array<int, array{number: int, episodes: int}> $seasons */
     private static function episodeExists(array $seasons, int $position): bool
     {
-        $episode = $position % 1000;
+        $episode = $position % Marks::SEASON;
 
         foreach ($seasons as $season) {
-            if ($season['number'] === intdiv($position, 1000)) {
+            if ($season['number'] === intdiv($position, Marks::SEASON)) {
                 return $episode === Marks::SEASON_END || ($episode >= 1 && $episode <= $season['episodes']);
             }
         }

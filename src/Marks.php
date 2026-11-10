@@ -8,7 +8,7 @@ namespace ErnestDefoe\SpoilerShield;
  * on that work's ladder, compared with `<=`:
  *
  *  - here: the step's place in the work's list, 1-based;
- *  - Marquee TV: season × 1000 + episode, and season × 1000 + 999 for "the
+ *  - Marquee TV: season × 100000 + episode, and season × 100000 + 99999 for "the
  *    whole season" (so finishing a season reaches every episode of it);
  *  - Anthology: the chapter's position in its series.
  *
@@ -19,7 +19,9 @@ final class Marks
 {
     public const FINISHED = 2147483647;
 
-    public const SEASON_END = 999;
+    public const SEASON = 100000;
+
+    public const SEASON_END = 99999;
 
     /** @return array{0: string, 1: int}|null */
     public static function parse(mixed $key): ?array
@@ -42,7 +44,7 @@ final class Marks
             return null;
         }
 
-        return $season * 1000 + ($episode ?: self::SEASON_END);
+        return $season * self::SEASON + ($episode ?: self::SEASON_END);
     }
 
     /**
@@ -55,8 +57,8 @@ final class Marks
 
         return match (true) {
             $position === self::FINISHED => 'finished',
-            $source === 'mq' && $position % 1000 === self::SEASON_END => 'season-'.intdiv($position, 1000),
-            $source === 'mq' => 's'.intdiv($position, 1000).'e'.($position % 1000),
+            $source === 'mq' && $position % self::SEASON === self::SEASON_END => 'season-'.intdiv($position, self::SEASON),
+            $source === 'mq' => 's'.intdiv($position, self::SEASON).'e'.($position % self::SEASON),
             $source === 'an' => 'chapter-'.$position,
             default => self::slug((string) $stored),
         };

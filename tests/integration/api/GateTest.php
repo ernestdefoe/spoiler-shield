@@ -299,7 +299,7 @@ class GateTest extends TestCase
         $this->app();
         $now = Carbon::now()->subHour();
         $this->database()->table('discussions')->insert([
-            ['id' => 7, 'title' => 'Dragon episode chat', 'slug' => 's2e5', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'mq:1', 'spoiler_position' => 2005],
+            ['id' => 7, 'title' => 'Dragon episode chat', 'slug' => 's2e5', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'mq:1', 'spoiler_position' => 200005],
             ['id' => 8, 'title' => 'Chapter nine chat', 'slug' => 'chapter-9', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'an:1', 'spoiler_position' => 9],
         ]);
 

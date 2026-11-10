@@ -26,12 +26,12 @@ return [
                 ->chunk(500, function ($rows) use ($db) {
                     foreach ($rows as $row) {
                         $position = Marks::marqueePosition($row->marquee_season ? (int) $row->marquee_season : null, $row->marquee_episode ? (int) $row->marquee_episode : null);
-                        $episode = $position === null ? 0 : $position % 1000;
+                        $episode = $position === null ? 0 : $position % Marks::SEASON;
                         $db->table('discussions')->where('id', $row->id)->update([
                             'spoiler_work' => 'mq:'.(int) $row->marquee_media_id,
                             'spoiler_position' => $position,
                         ] + ($position === null ? [] : [
-                            'slug' => $episode === Marks::SEASON_END ? 'season-'.intdiv($position, 1000) : Marks::slug('S'.intdiv($position, 1000).'E'.$episode),
+                            'slug' => $episode === Marks::SEASON_END ? 'season-'.intdiv($position, Marks::SEASON) : Marks::slug('S'.intdiv($position, Marks::SEASON).'E'.$episode),
                         ]));
                     }
                 });

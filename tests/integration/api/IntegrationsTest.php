@@ -101,13 +101,13 @@ class IntegrationsTest extends TestCase
         $season = $this->marqueeDiscussion(11, self::SEASON, 2, null);
         $early = $this->marqueeDiscussion(12, 'Pilot thoughts', 1, 2);
 
-        $this->assertSame(['mq:1', 2005, 's2e5'], [$episode->spoiler_work, (int) $episode->spoiler_position, $episode->slug]);
-        $this->assertSame(2999, (int) $season->spoiler_position, 'the whole season');
+        $this->assertSame(['mq:1', 200005, 's2e5'], [$episode->spoiler_work, (int) $episode->spoiler_position, $episode->slug]);
+        $this->assertSame(299999, (int) $season->spoiler_position, 'the whole season');
 
         // Bea finished season 1 (its last episode reaches every season 1 discussion).
-        $this->assertSame(422, $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'mq:1', 'position' => 1011])[0]);
-        [, $doc] = $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'mq:1', 'position' => 1010]);
-        $this->assertSame(1999, $doc['data']['position']);
+        $this->assertSame(422, $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'mq:1', 'position' => 100011])[0]);
+        [, $doc] = $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'mq:1', 'position' => 100010]);
+        $this->assertSame(199999, $doc['data']['position']);
 
         $raw = $this->api('GET', '/api/discussions', 3)[2];
         $this->assertStringContainsString('Pilot thoughts', $raw);
@@ -116,7 +116,7 @@ class IntegrationsTest extends TestCase
         $this->assertStringContainsString('"label":"S2E5"', $raw);
 
         // Then the whole of season 2.
-        $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'mq:1', 'position' => 2010]);
+        $this->api('POST', '/api/spoiler-shield/progress', 3, ['work' => 'mq:1', 'position' => 200010]);
         $raw = $this->api('GET', '/api/discussions', 3)[2];
         $this->assertStringContainsString(self::EPISODE, $raw);
         $this->assertStringContainsString(self::SEASON, $raw);
@@ -127,6 +127,19 @@ class IntegrationsTest extends TestCase
         $this->assertNull($episode->fresh()->spoiler_work);
         $this->assertSame('the-dragon-burns-the-harbor-city', $episode->fresh()->slug);
         $this->assertNotNull($early->fresh()->spoiler_work);
+    }
+
+    #[Test]
+    public function long_seasons_keep_their_episodes_in_order(): void
+    {
+        // A daily show: 1,200 episodes in season one.
+        $ladder = ['type' => 'episodes', 'seasons' => [['number' => 1, 'episodes' => 1200], ['number' => 2, 'episodes' => 5]]];
+        $late = \ErnestDefoe\SpoilerShield\Marks::marqueePosition(1, 1100);
+
+        $this->assertTrue(\ErnestDefoe\SpoilerShield\Ladders::valid($ladder, $late, true));
+        $this->assertLessThan(\ErnestDefoe\SpoilerShield\Marks::marqueePosition(2, 1), $late);
+        $this->assertLessThan(\ErnestDefoe\SpoilerShield\Marks::marqueePosition(1, null), $late, 'still inside season one');
+        $this->assertSame('s1e1100', \ErnestDefoe\SpoilerShield\Marks::slugFor('mq:1', $late, null));
     }
 
     #[Test]

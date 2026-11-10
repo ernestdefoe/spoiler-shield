@@ -3,7 +3,8 @@ import type Mithril from 'mithril';
 import { t } from '../util';
 
 export const FINISHED = 2147483647;
-const SEASON_END = 999;
+const SEASON = 100000;
+const SEASON_END = 99999;
 
 export interface Ladder {
   type: 'steps' | 'episodes' | 'finished' | 'chapters';
@@ -17,8 +18,8 @@ export function labelFor(ladder: Ladder, position: number): string {
   if (position === FINISHED) return String(t('ladder.finished'));
   if (ladder.type === 'steps') return ladder.steps?.[position - 1] ?? '#' + position;
   if (ladder.type === 'episodes') {
-    const season = Math.floor(position / 1000);
-    const episode = position % 1000;
+    const season = Math.floor(position / SEASON);
+    const episode = position % SEASON;
     return episode === SEASON_END ? String(t('ladder.season', { number: season })) : `S${season}E${episode}`;
   }
   return String(t('ladder.chapter', { number: position }));
@@ -54,10 +55,10 @@ export default class LadderPicker extends Component<Attrs> {
 
     if (ladder.type === 'episodes') {
       const seasons = ladder.seasons || [];
-      const season = value && value !== FINISHED ? Math.floor(value / 1000) : null;
+      const season = value && value !== FINISHED ? Math.floor(value / SEASON) : null;
       const current = seasons.find((s) => s.number === season);
-      const episode = value && value !== FINISHED ? value % 1000 : null;
-      // Progress at a season's end is stored as 999: shown as its last episode.
+      const episode = value && value !== FINISHED ? value % SEASON : null;
+      // Progress at a season's end is stored as SEASON_END: shown as its last episode.
       const shownEpisode = episode === SEASON_END && current && !marking ? current.episodes : episode;
 
       return (
@@ -67,7 +68,7 @@ export default class LadderPicker extends Component<Attrs> {
             value={value === FINISHED ? 'finished' : (season ?? '')}
             onchange={(e: Event) => {
               const v = (e.target as HTMLSelectElement).value;
-              onchange(v === 'finished' ? FINISHED : v ? Number(v) * 1000 + (marking ? SEASON_END : 1) : null);
+              onchange(v === 'finished' ? FINISHED : v ? Number(v) * SEASON + (marking ? SEASON_END : 1) : null);
             }}
           >
             <option value="">{t('ladder.season_choose')}</option>
@@ -80,7 +81,7 @@ export default class LadderPicker extends Component<Attrs> {
             <select
               className="FormControl"
               value={shownEpisode ?? ''}
-              onchange={(e: Event) => onchange(season! * 1000 + Number((e.target as HTMLSelectElement).value))}
+              onchange={(e: Event) => onchange(season! * SEASON + Number((e.target as HTMLSelectElement).value))}
             >
               {marking ? <option value={SEASON_END}>{t('ladder.whole_season')}</option> : null}
               {Array.from({ length: current.episodes }, (_, i) => (

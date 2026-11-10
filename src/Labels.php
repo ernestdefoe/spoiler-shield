@@ -20,8 +20,8 @@ final class Labels
         $source = Marks::parse($work)[0] ?? 'w';
 
         if ($source === 'mq') {
-            $season = intdiv($position, 1000);
-            $episode = $position % 1000;
+            $season = intdiv($position, Marks::SEASON);
+            $episode = $position % Marks::SEASON;
 
             return $episode === Marks::SEASON_END
                 ? $this->translator->trans('ernestdefoe-spoiler-shield.lib.season', ['number' => $season])
