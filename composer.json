@@ -58,7 +58,8 @@
                 "flarum/mentions",
                 "ernestdefoe/marquee",
                 "ernestdefoe/anthology",
-                "ernestdefoe/curio"
+                "ernestdefoe/curio",
+                "flarum/realtime"
             ]
         }
     },
@@ -68,6 +69,7 @@
         "ernestdefoe/marquee": "^1.0",
         "flarum/mentions": "^2.0",
         "flarum/phpstan": "^2.0",
+        "flarum/realtime": "^2.0",
         "flarum/tags": "^2.0",
         "flarum/testing": "^2.0"
     },

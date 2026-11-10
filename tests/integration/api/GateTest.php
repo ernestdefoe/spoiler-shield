@@ -282,6 +282,20 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function realtimes_public_push_carries_no_text_of_marked_items(): void
+    {
+        $generator = $this->app()->getContainer()->make(\Flarum\Realtime\Push\Payload\Generator::class);
+
+        $public = $generator(Post::query()->find(3));
+        $this->assertArrayNotHasKey('attributes', collect($public['included'])->firstWhere('id', '3') ?? ['attributes' => 'missing post']);
+        $this->assertArrayNotHasKey('attributes', $public['data'], 'the marked discussion too');
+
+        // Built for a member it's gated like any read, and whole for one who may read it.
+        $this->assertStringContainsString(self::REPLY, json_encode($generator(Post::query()->find(3), User::query()->find(4))));
+        $this->assertArrayHasKey('attributes', $generator(Post::query()->find(5))['data'], 'unmarked: untouched');
+    }
+
+    #[Test]
     public function a_new_discussion_is_marked_from_the_composer_and_its_slug_hides_the_title(): void
     {
         $create = fn (array $mark) => $this->api('POST', '/api/discussions', 2, ['data' => ['type' => 'discussions', 'attributes' => [

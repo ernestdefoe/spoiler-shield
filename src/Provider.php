@@ -14,6 +14,11 @@ class Provider extends AbstractServiceProvider
     {
         // One per request (or job): it remembers which discussions were marked by hand.
         $this->container->singleton(MarkWriter::class);
+
+        // flarum/realtime may be absent: then its class is too.
+        if (class_exists(\Flarum\Realtime\Push\Payload\Generator::class)) {
+            $this->container->bind(\Flarum\Realtime\Push\Payload\Generator::class, Integration\RealtimePublicPayload::class);
+        }
     }
 
     public function boot(): void
