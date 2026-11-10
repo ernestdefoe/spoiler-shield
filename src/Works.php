@@ -22,7 +22,7 @@ final class Works
      * @param string[] $keys
      * @return array<string, array{title: string, kind: string, catalog: ?string, steps?: list<string>}>
      */
-    public function describe(array $keys): array
+    public function describe(array $keys, ?User $actor = null): array
     {
         $ids = ['w' => [], 'mq' => [], 'an' => []];
         foreach (array_unique($keys) as $key) {
@@ -50,7 +50,8 @@ final class Works
             }
         }
 
-        if ($ids['an'] && $this->integrations->anthology()) {
+        // An Anthology series' name only for those who may see Anthology.
+        if ($ids['an'] && $this->integrations->anthology() && (! $actor || $actor->hasPermission('anthology.view'))) {
             foreach ($this->db->table('anthology_series')->whereIn('id', $ids['an'])->get(['id', 'title']) as $row) {
                 $out['an:'.$row->id] = ['title' => (string) $row->title, 'kind' => 'book', 'catalog' => null];
             }

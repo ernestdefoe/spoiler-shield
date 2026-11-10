@@ -13,7 +13,6 @@ use Illuminate\Contracts\Session\Session;
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Database\ConnectionInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * The forum page's own HTML, after every other extension wrote into it (this
@@ -35,7 +34,6 @@ class ScrubDocument
         private readonly Gate $gate,
         private readonly Works $works,
         private readonly Labels $labels,
-        private readonly TranslatorInterface $translator,
         private readonly ConnectionInterface $db,
     ) {
     }
@@ -74,14 +72,11 @@ class ScrubDocument
             return;
         }
 
-        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))));
+        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))), $actor);
         $placeholder = function (int $id) use ($discussions, $works): string {
             $d = $discussions[$id];
 
-            return $this->translator->trans('ernestdefoe-spoiler-shield.lib.placeholder', [
-                'label' => $this->labels->for((string) $d['work'], (int) $d['position'], $d['label']),
-                'work' => $works[$d['work']]['title'] ?? '',
-            ]);
+            return $this->labels->placeholder($this->labels->for((string) $d['work'], (int) $d['position'], $d['label']), $works[$d['work']]['title'] ?? '');
         };
 
         if ($currentHidden) {

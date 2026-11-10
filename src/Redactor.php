@@ -4,7 +4,6 @@ namespace ErnestDefoe\SpoilerShield;
 
 use Flarum\User\User;
 use Illuminate\Contracts\Session\Session;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Takes the spoilers out of a JSON:API document before it leaves the server.
@@ -42,7 +41,6 @@ final class Redactor
         private readonly Gate $gate,
         private readonly Works $works,
         private readonly Labels $labels,
-        private readonly TranslatorInterface $translator,
     ) {
     }
 
@@ -62,7 +60,7 @@ final class Redactor
         $verdict = $this->gate->check($actor, $session, $discussions, $posts);
 
         $workKeys = array_values(array_unique(array_filter(array_merge(array_column($discussions, 'work'), array_column($posts, 'work')))));
-        $works = $workKeys ? $this->works->describe($workKeys) : [];
+        $works = $workKeys ? $this->works->describe($workKeys, $actor) : [];
         $offers = $verdict->anythingHidden() ? $this->works->inCollection($actor, $works) : [];
 
         $context = compact('discussions', 'posts', 'verdict', 'works', 'offers');
@@ -112,7 +110,7 @@ final class Redactor
             return $doc;
         }
 
-        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))));
+        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))), $actor);
 
         foreach ($chapters as $i => $chapter) {
             $id = (int) ($chapter['id'] ?? 0);
@@ -169,7 +167,7 @@ final class Redactor
             return $doc;
         }
 
-        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))));
+        $works = $this->works->describe(array_values(array_unique(array_filter(array_column($discussions, 'work')))), $actor);
         $replace = function ($node) use (&$replace, $verdict, $discussions, $works) {
             if (! is_array($node)) {
                 return $node;
@@ -519,10 +517,7 @@ final class Redactor
     /** "Spoiler for S2E5 (Breaking Bad)" */
     private function placeholder(?array $shield): string
     {
-        return $this->translator->trans('ernestdefoe-spoiler-shield.lib.placeholder', [
-            'label' => $shield['label'] ?? $this->translator->trans('ernestdefoe-spoiler-shield.lib.later'),
-            'work' => $shield['title'] ?? '',
-        ]);
+        return $this->labels->placeholder($shield['label'] ?? null, (string) ($shield['title'] ?? ''));
     }
 
     /**

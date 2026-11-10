@@ -34,4 +34,14 @@ final class Labels
 
         return $stored !== null && $stored !== '' ? $stored : '#'.$position;
     }
+
+    /** "Spoiler for S2E5 (Breaking Bad)", or without the name when the viewer may not see it. */
+    public function placeholder(?string $label, string $work): string
+    {
+        $label ??= $this->translator->trans('ernestdefoe-spoiler-shield.lib.later');
+
+        return $work === ''
+            ? $this->translator->trans('ernestdefoe-spoiler-shield.lib.placeholder_unnamed', ['label' => $label])
+            : $this->translator->trans('ernestdefoe-spoiler-shield.lib.placeholder', ['label' => $label, 'work' => $work]);
+    }
 }

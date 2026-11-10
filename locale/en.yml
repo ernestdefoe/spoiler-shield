@@ -2,6 +2,7 @@ ernestdefoe-spoiler-shield:
   # Made on the server: titles and posts someone isn't far enough along to see.
   lib:
     placeholder: "Spoiler for {label} ({work})"
+    placeholder_unnamed: "Spoiler for {label}"
     later: "later on"
     finished: Finished
     season: "Season {number}"

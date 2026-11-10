@@ -37,7 +37,7 @@ class ProgressController implements RequestHandlerInterface
 
         if ($request->getMethod() === 'GET') {
             $rows = $this->db->table('spoiler_progress')->where('user_id', $actor->id)->orderByDesc('updated_at')->limit(200)->get(['work', 'position']);
-            $works = $this->works->describe($rows->pluck('work')->all());
+            $works = $this->works->describe($rows->pluck('work')->all(), $actor);
 
             return new JsonResponse(['data' => $rows->filter(fn ($row) => isset($works[$row->work]))->map(fn ($row) => [
                 'work' => $row->work,

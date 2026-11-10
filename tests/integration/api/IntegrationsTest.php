@@ -130,6 +130,33 @@ class IntegrationsTest extends TestCase
     }
 
     #[Test]
+    public function an_anthology_series_name_is_only_for_those_who_may_see_anthology(): void
+    {
+        $this->app();
+        foreach ([20 => 1, 21 => 2, 22 => 3] as $discussion => $position) {
+            $chapter = new Chapter();
+            $chapter->discussion_id = $discussion;
+            $chapter->series_id = 1;
+            $chapter->position = $position;
+            $chapter->created_at = Carbon::now();
+            $chapter->save();
+        }
+        $this->database()->table('group_permission')->where('permission', 'anthology.view')->delete();
+
+        $raw = $this->api('GET', '/api/discussions', 3)[2];
+        $this->assertStringNotContainsString('Starfall"', $raw, 'no series name in the marks');
+        $this->assertNotContains('Starfall', array_column($this->api('GET', '/api/spoiler-shield/works', 3)[1]['data'], 'title'));
+        // The harness parses a URL string strictly ("an:1" reads as a port); set the path itself.
+        $work = function (string $key) {
+            $request = $this->request('GET', '/api/spoiler-shield/works', ['authenticatedAs' => 3]);
+
+            return $this->send($request->withUri($request->getUri()->withPath('/api/spoiler-shield/works/'.$key)))->getStatusCode();
+        };
+        $this->assertSame(404, $work('an:1'));
+        $this->assertSame(200, $work('mq:1'), 'the same address works for a work she may see');
+    }
+
+    #[Test]
     public function long_seasons_keep_their_episodes_in_order(): void
     {
         // A daily show: 1,200 episodes in season one.

@@ -72,7 +72,7 @@ class WorksController implements RequestHandlerInterface
             }
         }
 
-        if ($this->integrations->anthology()) {
+        if ($this->integrations->anthology() && $actor->hasPermission('anthology.view')) {
             foreach ($this->db->table('anthology_series')->when($q !== '', fn ($w) => $w->where('title', 'like', $like))->orderBy('title')->limit(10)->get(['id', 'title']) as $row) {
                 $out[] = ['work' => 'an:'.$row->id, 'title' => $row->title, 'kind' => 'book'];
             }
@@ -84,7 +84,7 @@ class WorksController implements RequestHandlerInterface
     private function show(User $actor, string $key): ResponseInterface
     {
         $ladder = Marks::parse($key) ? $this->ladders->get($key) : null;
-        $work = $ladder ? ($this->works->describe([$key])[$key] ?? null) : null;
+        $work = $ladder ? ($this->works->describe([$key], $actor)[$key] ?? null) : null;
 
         if (! $work) {
             return Json::error(404, 'not_found');
