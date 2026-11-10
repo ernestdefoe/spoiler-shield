@@ -252,6 +252,15 @@ final class MarkWriter
                 $position = $now;
                 $stampWork = $work;
             }
+        } elseif (! $first && $post->exists && $post->isDirty('content') && $work !== null && $discussion->spoiler_position !== null
+            && $stampWork !== null && $stampWork !== $work && $position !== null && $post->user) {
+            // Its stamp is another work's (it quoted that one). If its author is now past this
+            // discussion's place, an edit could add this work's spoilers with nothing to gate them:
+            // refused when it adds anything (new quotes, more words). Fixing a typo still works.
+            $now = $this->positions->read($post->user, $work);
+            if ($now !== null && $now > $floor && $this->grows($post)) {
+                $this->invalid('quote_other_work');
+            }
         }
 
         // Nothing past the discussion's own place: no mark needed.
@@ -280,6 +289,23 @@ final class MarkWriter
         $post->spoiler_position = $position;
         $post->spoiler_work = $position === null ? null : $stampWork;
         $post->spoiler_label = $position === null ? null : $this->storedLabel((string) $stampWork, $position);
+    }
+
+    /** Whether an edit adds anything: other quotes or mentions than before, or more words. */
+    private function grows(CommentPost $post): bool
+    {
+        $before = (string) $post->getRawOriginal('content');
+        $after = (string) ($post->getAttributes()['content'] ?? '');
+        $quotes = function (string $xml): array {
+            preg_match_all('/<POSTMENTION\b[^>]*\bid="(\d+)"/', $xml, $m);
+            $ids = array_unique($m[1]);
+            sort($ids);
+
+            return $ids;
+        };
+
+        return $quotes($before) !== $quotes($after)
+            || mb_strlen(trim(strip_tags($after))) > mb_strlen(trim(strip_tags($before)));
     }
 
     /**

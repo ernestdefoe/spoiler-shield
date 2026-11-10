@@ -348,6 +348,24 @@ class GateTest extends TestCase
     }
 
     #[Test]
+    public function editing_a_reply_stamped_with_another_work_cannot_add_this_works_spoilers(): void
+    {
+        $this->app();
+        $now = Carbon::now()->subHour();
+        $db = $this->database();
+        $db->table('spoiler_works')->insert(['id' => 2, 'title' => 'Other Book', 'kind' => 'book', 'steps' => json_encode(['One', 'Two']), 'created_at' => $now, 'updated_at' => $now]);
+        // Bea's reply in the chapter 1 thread quoted the other book (stamped there), back when she was at chapter 1.
+        $db->table('posts')->insert(['id' => 7, 'discussion_id' => 2, 'number' => 4, 'user_id' => 3, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>The other book ends at sea</p></t>', 'spoiler_work' => 'w:2', 'spoiler_position' => 2]);
+
+        // She's now at chapter 2 here, past the thread's chapter 1.
+        $edit = fn (string $text) => $this->api('PATCH', '/api/posts/7', 3, ['data' => ['type' => 'posts', 'id' => '7', 'attributes' => ['content' => $text]]])[0];
+
+        $this->assertSame(422, $edit('The other book ends at sea. And in chapter two here, the bridge falls'), 'more words: refused');
+        $this->assertSame(200, $edit('The other book ends at Sea'), 'a typo fix: fine');
+        $this->assertSame(['w:2', 2], [Post::query()->find(7)->spoiler_work, (int) Post::query()->find(7)->spoiler_position]);
+    }
+
+    #[Test]
     public function an_edit_raises_the_stamp_to_the_authors_place_now_never_lower(): void
     {
         // Bea (at chapter 2) replies in the chapter 1 thread: stamped at chapter 2.
