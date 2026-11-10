@@ -40,6 +40,12 @@ export function refreshAfterProgress() {
 export async function reveal(type: 'discussions' | 'posts', id: string) {
   const doc = await api('POST', '/reveals', { type, id: Number(id) });
   app.store.pushPayload(doc);
+  // A discussion's own posts open with it: those already on screen still carry their veils.
+  const loaded = type === 'discussions' ? app.store.all<any>('posts').filter((p) => p.discussion?.()?.id?.() === id && shieldOf(p)?.hidden) : [];
+  if (loaded.length) {
+    const ids = loaded.map((p) => p.id()).join(',');
+    app.store.pushPayload(await app.request<any>({ method: 'GET', url: `${app.forum.attribute('apiUrl')}/posts`, params: { filter: { id: ids } } }));
+  }
   m.redraw();
 }
 

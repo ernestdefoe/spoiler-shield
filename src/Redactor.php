@@ -410,6 +410,12 @@ final class Redactor
         $id = (int) ($resource['id'] ?? 0);
         unset($resource['attributes']['ssMark']);
 
+        // Always present, null when unmarked: the forum merges attributes, so a revealed item
+        // would otherwise keep its old mark.
+        if ($type === 'discussions' || $type === 'posts') {
+            $resource['attributes']['spoilerShield'] = null;
+        }
+
         if ($type === 'discussions') {
             $mark = $c['discussions'][$id] ?? null;
             $hidden = $c['verdict']->discussionHidden($id);

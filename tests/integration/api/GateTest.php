@@ -175,7 +175,7 @@ class GateTest extends TestCase
         $this->assertStringContainsString('SpoilerShield-placeholder', $posts['3']['attributes']['contentHtml']);
         // An event post keeps the shape the page draws it from.
         $this->assertCount(2, $posts['4']['attributes']['content']);
-        $this->assertArrayNotHasKey('spoilerShield', $posts['2']['attributes'], 'nothing past the discussion');
+        $this->assertNull($posts['2']['attributes']['spoilerShield'], 'nothing past the discussion (null, so a client drops an old mark)');
         $this->assertSame('1-ch-4', $this->api('GET', '/api/discussions/1', 3)[1]['data']['attributes']['slug']);
     }
 

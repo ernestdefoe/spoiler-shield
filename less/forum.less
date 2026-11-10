@@ -173,6 +173,11 @@ html:not(#x-hi) .SpoilerShield-veil--compact {
     }
   }
 
+  // The phone's discussion nav is one row of buttons: the veils already say where you are.
+  .DiscussionPage-nav .item-spoilerShield {
+    display: none;
+  }
+
   // The title moves to the top bar on phones, so nothing sits before the chip.
   .ComposerBody .ComposerBody-header > li.item-spoilerShield {
     margin-inline-start: 0;
