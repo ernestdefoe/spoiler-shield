@@ -1,0 +1,47 @@
+<?php
+
+use ErnestDefoe\SpoilerShield\Marks;
+use Illuminate\Database\Schema\Builder;
+
+/*
+ * Discussions Marquee already linked to an episode or a season, and chapters
+ * already in Anthology series, get their marks (and position slugs) now. After
+ * this the MarkWriter keeps them in step. Either extension may be missing.
+ */
+return [
+    'up' => function (Builder $schema) {
+        $db = $schema->getConnection();
+
+        if ($schema->hasColumn('discussions', 'marquee_media_id')) {
+            $db->table('discussions')->whereNotNull('marquee_media_id')->whereNull('spoiler_work')
+                ->orderBy('id')->select(['id', 'marquee_media_id', 'marquee_season', 'marquee_episode'])
+                ->chunk(500, function ($rows) use ($db) {
+                    foreach ($rows as $row) {
+                        $position = Marks::marqueePosition($row->marquee_season ? (int) $row->marquee_season : null, $row->marquee_episode ? (int) $row->marquee_episode : null);
+                        $episode = $position === null ? 0 : $position % 1000;
+                        $db->table('discussions')->where('id', $row->id)->update([
+                            'spoiler_work' => 'mq:'.(int) $row->marquee_media_id,
+                            'spoiler_position' => $position,
+                        ] + ($position === null ? [] : [
+                            'slug' => $episode === Marks::SEASON_END ? 'season-'.intdiv($position, 1000) : Marks::slug('S'.intdiv($position, 1000).'E'.$episode),
+                        ]));
+                    }
+                });
+        }
+
+        if ($schema->hasTable('anthology_chapters')) {
+            $db->table('anthology_chapters')->orderBy('discussion_id')->select(['discussion_id', 'series_id', 'position'])
+                ->chunk(500, function ($rows) use ($db) {
+                    foreach ($rows as $row) {
+                        $position = max(1, (int) $row->position);
+                        $db->table('discussions')->where('id', $row->discussion_id)
+                            ->where(fn ($q) => $q->whereNull('spoiler_work')->orWhere('spoiler_work', 'like', 'mq:%'))
+                            ->update(['spoiler_work' => 'an:'.(int) $row->series_id, 'spoiler_position' => $position, 'spoiler_label' => null, 'slug' => 'chapter-'.$position]);
+                    }
+                });
+        }
+    },
+    'down' => function (Builder $schema) {
+        // The columns go with the migration before this one.
+    },
+];
