@@ -3,6 +3,7 @@
 namespace ErnestDefoe\SpoilerShield\Http;
 
 use ErnestDefoe\SpoilerShield\Redactor;
+use ErnestDefoe\SpoilerShield\Search\HiddenFromSearch;
 use Flarum\Http\RequestUtil;
 use Laminas\Diactoros\StreamFactory;
 use Psr\Http\Message\ResponseInterface;
@@ -30,7 +31,10 @@ class RedactApi implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $response = $handler->handle($request);
+        // A word search leaves out, inside the query, what the searcher may not read.
+        $response = $this->searching($request)
+            ? HiddenFromSearch::during(RequestUtil::getActor($request), $request->getAttribute('session'), fn () => $handler->handle($request))
+            : $handler->handle($request);
 
         if (! str_contains($response->getHeaderLine('Content-Type'), 'json')) {
             return $response;

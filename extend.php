@@ -22,15 +22,19 @@ use ErnestDefoe\SpoilerShield\Http\RedactApi;
 use ErnestDefoe\SpoilerShield\Http\ScrubDocument;
 use ErnestDefoe\SpoilerShield\MarkWriter;
 use ErnestDefoe\SpoilerShield\Provider;
+use ErnestDefoe\SpoilerShield\Search\HiddenFromSearch;
 use Flarum\Api\Context;
 use Flarum\Api\Resource\DiscussionResource;
 use Flarum\Api\Resource\ForumResource;
 use Flarum\Api\Resource\PostResource;
 use Flarum\Api\Schema;
+use Flarum\Discussion\Discussion;
 use Flarum\Discussion\Event\Saving as DiscussionSaving;
 use Flarum\Extend;
 use Flarum\Post\Event\Saving as PostSaving;
+use Flarum\Post\Post;
 use Flarum\Tags\Event\DiscussionWasTagged;
+use Flarum\User\User;
 
 return [
     (new Extend\Frontend('forum'))
@@ -49,6 +53,12 @@ return [
     (new Extend\ServiceProvider())->register(Provider::class),
 
     (new Extend\Middleware('api'))->add(RedactApi::class),
+
+    // Only while a request searches by words (RedactApi opens that window): hidden items can't match.
+    (new Extend\ModelVisibility(Discussion::class))
+        ->scope(fn (User $actor, $query) => resolve(HiddenFromSearch::class)->discussions($actor, $query)),
+    (new Extend\ModelVisibility(Post::class))
+        ->scope(fn (User $actor, $query) => resolve(HiddenFromSearch::class)->posts($actor, $query)),
 
     (new Extend\Routes('api'))
         ->post('/spoiler-shield/reveals', 'spoiler-shield.reveal', Api\RevealController::class)

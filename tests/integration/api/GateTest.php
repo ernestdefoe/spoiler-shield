@@ -331,6 +331,16 @@ class GateTest extends TestCase
         $this->assertNotContains('1', $ids(3), 'behind: not even a blurred hit');
         $this->assertNotContains('1', $ids(null));
         $this->assertContains('1', $ids(4));
+
+        // A readable discussion must not turn up because a hidden reply in it matched.
+        $words = fn (?int $as) => array_column($this->api('GET', '/api/discussions', $as, [], ['filter' => ['q' => 'final chapter']])[1]['data'], 'id');
+        $this->assertNotContains('2', $words(3));
+        $this->assertContains('2', $words(4));
+
+        // Searching posts: the hidden reply isn't a match at all.
+        $posts = fn (?int $as) => array_column($this->api('GET', '/api/posts', $as, [], ['filter' => ['q' => 'final chapter']])[1]['data'] ?? [], 'id');
+        $this->assertNotContains('3', $posts(3));
+        $this->assertContains('3', $posts(4));
     }
 
     #[Test]
