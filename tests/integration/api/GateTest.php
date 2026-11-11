@@ -352,8 +352,10 @@ class GateTest extends TestCase
         $now = Carbon::now()->subHour();
         $db = $this->database();
         $db->table('spoiler_works')->insert(['id' => 2, 'title' => 'Other Book', 'kind' => 'book', 'steps' => json_encode(['One', 'Two']), 'created_at' => $now, 'updated_at' => $now]);
-        $db->table('discussions')->insert(['id' => 6, 'title' => 'Other book ch 2', 'slug' => 'two', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'first_post_id' => 6, 'spoiler_work' => 'w:2', 'spoiler_position' => 2, 'spoiler_label' => 'Two']);
+        // Discussion, then its post, then the link between them (MySQL and PostgreSQL check the keys).
+        $db->table('discussions')->insert(['id' => 6, 'title' => 'Other book ch 2', 'slug' => 'two', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'w:2', 'spoiler_position' => 2, 'spoiler_label' => 'Two']);
         $db->table('posts')->insert(['id' => 6, 'discussion_id' => 6, 'number' => 1, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>The other twist</p></t>']);
+        $db->table('discussions')->where('id', 6)->update(['first_post_id' => 6]);
 
         // Ash (finished The Long Road) replies in its chapter 1 thread, so her reply goes to "Finished"; quoting the other book is refused.
         $reply = fn (string $text) => $this->api('POST', '/api/posts', 4, ['data' => ['type' => 'posts', 'attributes' => ['content' => $text], 'relationships' => ['discussion' => ['data' => ['type' => 'discussions', 'id' => '2']]]]]);
@@ -444,6 +446,15 @@ class GateTest extends TestCase
         $this->database()->table('posts')->insert(['id' => 7, 'discussion_id' => 1, 'number' => 2, 'user_id' => 5, 'type' => 'comment', 'created_at' => Carbon::now()->subHour(), 'content' => '<t><p>'.$quiet.'</p></t>']);
         $this->database()->table('discussions')->where('id', 1)->update(['comment_count' => 2, 'last_post_number' => 2, 'last_post_id' => 7]);
 
+        // The split creates a discussion and a post: on PostgreSQL the fixtures' explicit ids left the sequences behind.
+        $db = $this->database();
+        if ($db->getDriverName() === 'pgsql') {
+            foreach (['posts', 'discussions'] as $table) {
+                $name = $db->getTablePrefix().$table;
+                $db->statement("select setval(pg_get_serial_sequence('$name', 'id'), (select max(id) from \"$name\"))");
+            }
+        }
+
         // The real split (a bulk UPDATE of discussion_id, no model events).
         [$status] = $this->api('POST', '/api/split', 1, ['title' => 'Split off', 'start_post_id' => 7, 'end_post_number' => 2]);
         $this->assertLessThan(300, $status);
@@ -467,6 +478,8 @@ class GateTest extends TestCase
     #[Test]
     public function marks_from_an_extension_that_is_switched_off_count_as_unmarked(): void
     {
+        // Core's LIKE search on every database: MySQL's full-text index can't see a test's uncommitted rows.
+        $this->setting('search_cjk_mode', '1');
         // Marquee and Anthology aren't enabled here: their marks are leftovers.
         $this->app();
         $now = Carbon::now()->subHour();
@@ -597,6 +610,9 @@ class GateTest extends TestCase
     #[Test]
     public function a_search_does_not_confirm_a_guess(): void
     {
+        // Core's LIKE search on every database: MySQL's full-text index can't see a test's uncommitted rows.
+        $this->setting('search_cjk_mode', '1');
+
         $ids = fn (?int $as) => array_column($this->api('GET', '/api/discussions', $as, [], ['filter' => ['q' => 'Kael']])[1]['data'], 'id');
 
         $this->assertNotContains('1', $ids(3), 'behind: not even a blurred hit');

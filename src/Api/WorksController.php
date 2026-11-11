@@ -59,21 +59,22 @@ class WorksController implements RequestHandlerInterface
     private function search(ServerRequestInterface $request, User $actor): ResponseInterface
     {
         $q = Json::line($request->getQueryParams()['q'] ?? '', 100);
+        // whereLike: case-insensitive on every database (plain LIKE is case-sensitive on PostgreSQL).
         $like = '%'.addcslashes($q, '%_\\').'%';
         $out = [];
 
-        foreach ($this->db->table('spoiler_works')->when($q !== '', fn ($w) => $w->where('title', 'like', $like))->orderBy('title')->limit(20)->get(['id', 'title', 'kind', 'user_id']) as $row) {
+        foreach ($this->db->table('spoiler_works')->when($q !== '', fn ($w) => $w->whereLike('title', $like))->orderBy('title')->limit(20)->get(['id', 'title', 'kind', 'user_id']) as $row) {
             $out[] = ['work' => 'w:'.$row->id, 'title' => $row->title, 'kind' => $row->kind, 'canEdit' => $this->canEdit($actor, new Work(['user_id' => $row->user_id]))];
         }
 
         if ($this->integrations->marquee()) {
-            foreach ($this->db->table('marquee_media')->whereIn('kind', ['tv', 'movie', 'game'])->when($q !== '', fn ($w) => $w->where('title', 'like', $like))->orderBy('title')->limit(10)->get(['id', 'title', 'kind', 'year']) as $row) {
+            foreach ($this->db->table('marquee_media')->whereIn('kind', ['tv', 'movie', 'game'])->when($q !== '', fn ($w) => $w->whereLike('title', $like))->orderBy('title')->limit(10)->get(['id', 'title', 'kind', 'year']) as $row) {
                 $out[] = ['work' => 'mq:'.$row->id, 'title' => $row->title.($row->year ? ' ('.$row->year.')' : ''), 'kind' => $row->kind === 'tv' ? 'show' : $row->kind];
             }
         }
 
         if ($this->integrations->anthology() && $actor->hasPermission('anthology.view')) {
-            foreach ($this->db->table('anthology_series')->when($q !== '', fn ($w) => $w->where('title', 'like', $like))->orderBy('title')->limit(10)->get(['id', 'title']) as $row) {
+            foreach ($this->db->table('anthology_series')->when($q !== '', fn ($w) => $w->whereLike('title', $like))->orderBy('title')->limit(10)->get(['id', 'title']) as $row) {
                 $out[] = ['work' => 'an:'.$row->id, 'title' => $row->title, 'kind' => 'book'];
             }
         }
