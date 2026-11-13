@@ -14,8 +14,7 @@ use PHPUnit\Framework\Attributes\Test;
 /**
  * A Panels series is a work: its chapters (number × 100) are the ladder,
  * each chapter's discussion sits at its chapter, and a member's place is
- * the highest chapter they finished in Panels' reader. Panels isn't on
- * Packagist yet, so these run only where it's installed (a path package).
+ * the highest chapter they finished in Panels' reader.
  */
 class PanelsTest extends TestCase
 {
@@ -26,10 +25,6 @@ class PanelsTest extends TestCase
 
     protected function setUp(): void
     {
-        if (! class_exists(Chapter::class)) {
-            $this->markTestSkipped('ernestdefoe/panels is not installed.');
-        }
-
         parent::setUp();
 
         $this->extension('flarum-tags', 'ernestdefoe-panels', 'ernestdefoe-spoiler-shield');

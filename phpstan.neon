@@ -12,9 +12,6 @@ parameters:
         - extend.php
         - src
     databaseMigrationsPath: [migrations]
-    # Panels isn't on Packagist yet: its classes come from a stub (tests/stubs/panels.php).
-    scanFiles:
-        - tests/stubs/panels.php
     # The spoiler_* columns this extension adds to core's discussions and posts tables
     # (migration 2026_11_10_200002): core's models can't declare them.
     ignoreErrors:
