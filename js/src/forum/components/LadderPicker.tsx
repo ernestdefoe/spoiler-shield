@@ -11,6 +11,9 @@ export interface Ladder {
   steps?: string[];
   seasons?: { number: number; episodes: number }[];
   chapters?: number[];
+  /** Panels: positions are chapter numbers × 100 (6.5 is 650). */
+  scale?: number;
+  tracker?: 'panels';
 }
 
 /** A position's words, made the same way the server makes them. */
@@ -22,7 +25,7 @@ export function labelFor(ladder: Ladder, position: number): string {
     const episode = position % SEASON;
     return episode === SEASON_END ? String(t('ladder.season', { number: season })) : `S${season}E${episode}`;
   }
-  return String(t('ladder.chapter', { number: position }));
+  return String(t('ladder.chapter', { number: position / (ladder.scale ?? 1) }));
 }
 
 interface Attrs {
@@ -94,7 +97,7 @@ export default class LadderPicker extends Component<Attrs> {
     }
 
     if (ladder.type === 'chapters') {
-      return <p className="helpText">{t('ladder.chapters_auto')}</p>;
+      return <p className="helpText">{t(ladder.tracker === 'panels' ? 'ladder.chapters_auto_finished' : 'ladder.chapters_auto')}</p>;
     }
 
     if (marking) {

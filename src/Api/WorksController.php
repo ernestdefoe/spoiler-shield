@@ -79,6 +79,15 @@ class WorksController implements RequestHandlerInterface
             }
         }
 
+        if ($this->integrations->panels() && $actor->hasPermission('panels.view')) {
+            // Panels' own scope: only series this member may browse (hidden, taken down and rating-limited ones stay out).
+            $series = \ErnestDefoe\Panels\Model\Series::query()->select(['panel_series.id', 'panel_series.title']);
+            resolve(\ErnestDefoe\Panels\Access::class)->scopeSeries($series, $actor);
+            foreach ($series->when($q !== '', fn ($w) => $w->whereLike('panel_series.title', $like))->orderBy('panel_series.title')->limit(10)->toBase()->get() as $row) {
+                $out[] = ['work' => 'pn:'.$row->id, 'title' => $row->title, 'kind' => 'book'];
+            }
+        }
+
         return new JsonResponse(['data' => $out]);
     }
 

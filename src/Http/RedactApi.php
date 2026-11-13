@@ -2,6 +2,7 @@
 
 namespace ErnestDefoe\SpoilerShield\Http;
 
+use ErnestDefoe\SpoilerShield\Integrations;
 use ErnestDefoe\SpoilerShield\Redactor;
 use ErnestDefoe\SpoilerShield\Search\HiddenFromSearch;
 use Flarum\Http\RequestUtil;
@@ -25,6 +26,7 @@ class RedactApi implements MiddlewareInterface
 {
     public function __construct(
         private readonly Redactor $redactor,
+        private readonly Integrations $integrations,
         private readonly LoggerInterface $log,
     ) {
     }
@@ -45,12 +47,16 @@ class RedactApi implements MiddlewareInterface
         // Anthology's series page lists its chapters (discussions) in plain JSON.
         $series = $request->getAttribute('routeName') === 'anthology.series.show';
 
+        // Panels' own pages name chapters, whose titles are in their discussions' titles.
+        $panels = in_array($request->getAttribute('routeName'), ['panels.series.show', 'panels.read.chapter', 'panels.feed'], true)
+            && $this->integrations->panels();
+
         $jsonApi = (bool) preg_match('/"type"\s*:\s*"(discussions|posts)"/', $body);
         // Other extensions' JSON (a widget's list of discussions) links to /d/{id}, escaped or not.
         $links = str_contains($body, '/d/') || str_contains($body, '\/d\/')
             || (bool) preg_match('/"discussion"\s*:\s*\{|"discussions"\s*:\s*\[|"discussionTitle"/', $body);
 
-        if (! $series && ! $jsonApi && ! $links) {
+        if (! $series && ! $panels && ! $jsonApi && ! $links) {
             return $response;
         }
 
@@ -67,6 +73,8 @@ class RedactApi implements MiddlewareInterface
             $session = $request->getAttribute('session');
             if ($series) {
                 $doc = $this->redactor->redactChapters($doc, $actor, $session);
+            } elseif ($panels) {
+                $doc = $this->redactor->redactPanels($doc, $actor, $session, $request->getAttribute('routeName') === 'panels.read.chapter');
             } elseif ($jsonApi && array_key_exists('data', $doc)) {
                 $doc = $this->redactor->redact($doc, $actor, $session, $this->searching($request));
             }
@@ -76,7 +84,7 @@ class RedactApi implements MiddlewareInterface
         } catch (Throwable $e) {
             // Fail closed: a broken check hides every title and post rather than showing one.
             $this->log->error('[spoiler-shield] '.$e->getMessage(), ['exception' => $e]);
-            $doc = $this->redactor->redactAll($doc);
+            $doc = $panels ? $this->redactor->blankPanels($doc) : $this->redactor->redactAll($doc);
         }
 
         // Nothing gated: the response leaves exactly as it came (empty JSON objects stay objects).

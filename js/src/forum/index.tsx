@@ -51,10 +51,10 @@ app.initializers.add('ernestdefoe/spoiler-shield', () => {
     );
   });
 
-  // Visible but marked: where it sits (Marquee already shows its own episode label).
+  // Visible but marked: where it sits (Marquee shows its own episode label, Panels the chapter in the title).
   extend('flarum/forum/components/DiscussionListItem', 'infoItems', function (this: any, items: ItemList<any>) {
     const shield = shieldOf(this.attrs.discussion);
-    if (!shield || shield.hidden || !shield.label || shield.work.startsWith('mq:')) return;
+    if (!shield || shield.hidden || !shield.label || shield.work.startsWith('mq:') || shield.work.startsWith('pn:')) return;
     items.add(
       'spoilerShield',
       <span className="SpoilerShield-mark" title={String(t('mark.title', { work: shield.title }))}>
@@ -89,7 +89,10 @@ app.initializers.add('ernestdefoe/spoiler-shield', () => {
           <Icon name="fas fa-user-secret" /> {shield.title}
         </div>
         <div className="SpoilerShield-progressCard-at">
-          {shield.viewer ? t('sidebar.you_are_at', { label: shield.viewer.label }) : t('sidebar.not_set')}
+          {shield.viewer
+            ? t('sidebar.you_are_at', { label: shield.viewer.label })
+            : // Anthology and Panels series keep the place themselves: nothing read yet, rather than nothing said.
+              t(/^(an|pn):/.test(shield.work) ? 'sidebar.not_started' : 'sidebar.not_set')}
         </div>
         <button type="button" className="Button Button--block" onclick={() => openProgress(shield.work)}>
           {shield.viewer ? t('sidebar.change') : t('sidebar.set')}

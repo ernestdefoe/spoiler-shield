@@ -127,6 +127,115 @@ final class Redactor
         return $doc;
     }
 
+    /**
+     * Panels' own JSON (a series' chapter list, the reader's previous/next
+     * links, the new-chapters feed) names chapters, and a chapter's title is
+     * in its discussion's title. A chapter past the viewer's place loses its
+     * title there, judged like its discussion (and like the discussion it will
+     * have, for one scheduled but not out). The chapter being read keeps its
+     * own (the member opened it to read it).
+     *
+     * @param array<string, mixed> $doc
+     * @return array<string, mixed>
+     */
+    public function redactPanels(array $doc, User $actor, ?Session $session, bool $reading): array
+    {
+        $paths = $this->panelsChapters($doc, $reading);
+        if (! $paths) {
+            return $doc;
+        }
+
+        $get = function (array $path) use ($doc) {
+            foreach ($path as $k) {
+                $doc = $doc[$k];
+            }
+
+            return $doc;
+        };
+        // Each chapter as the discussion it is (or will be): keyed by that discussion, so a
+        // reveal of it counts here too; a chapter with none yet by its negated id.
+        $chapters = $this->store->panelsChapters(array_map(fn ($p) => (int) $get($p)['id'], $paths));
+        $verdict = $this->gate->check($actor, $session, $chapters, []);
+
+        if (! $verdict->hiddenDiscussions) {
+            return $doc;
+        }
+
+        $keyOf = [];
+        foreach ($chapters as $key => $chapter) {
+            $keyOf[$chapter['chapter']] = $key;
+        }
+
+        foreach ($paths as $path) {
+            $key = $keyOf[(int) $get($path)['id']] ?? null;
+            if ($key === null || ! $verdict->discussionHidden($key)) {
+                continue;
+            }
+            $d = $chapters[$key];
+            $node = &$doc;
+            foreach ($path as $k) {
+                $node = &$node[$k];
+            }
+            $node['title'] = null;
+            $node['spoilerShield'] = ['hidden' => true, 'label' => $this->labels->for((string) $d['work'], (int) $d['position'], $d['label'])];
+            unset($node);
+        }
+
+        return $doc;
+    }
+
+    /**
+     * When the check fails on a Panels page: every chapter title goes, the one being read too.
+     *
+     * @param array<string, mixed> $doc
+     * @return array<string, mixed>
+     */
+    public function blankPanels(array $doc): array
+    {
+        foreach ($this->panelsChapters($doc, false) as $path) {
+            $node = &$doc;
+            foreach ($path as $k) {
+                $node = &$node[$k];
+            }
+            $node['title'] = null;
+            unset($node);
+        }
+
+        return $doc;
+    }
+
+    /**
+     * Where Panels' JSON has a chapter: an object with an id, a number and a title, under
+     * `chapter`, `prev`, `next` or in a `chapters` list. The chapter being read can be left out.
+     *
+     * @param array<string, mixed> $doc
+     * @return list<list<int|string>>
+     */
+    private function panelsChapters(array $doc, bool $reading): array
+    {
+        $paths = [];
+        $walk = function ($node, array $path) use (&$walk, &$paths, $reading) {
+            if (! is_array($node)) {
+                return;
+            }
+            $key = end($path);
+            $parent = count($path) > 1 ? $path[count($path) - 2] : null;
+            $chapter = (in_array($key, ['chapter', 'prev', 'next'], true) || (is_int($key) && $parent === 'chapters'))
+                && isset($node['id']) && array_key_exists('title', $node) && array_key_exists('number', $node);
+            if ($chapter && ! ($reading && $path === ['chapter'])) {
+                $paths[] = $path;
+            }
+            foreach ($node as $k => $value) {
+                $walk($value, [...$path, $k]);
+            }
+        };
+        foreach ($doc as $k => $value) {
+            $walk($value, [$k]);
+        }
+
+        return $paths;
+    }
+
     /** Words that may sit beside a discussion's link in another extension's JSON (a widget's list). */
     private const LINK_TEXT_KEYS = ['excerpt', 'summary', 'description', 'body', 'content', 'contentHtml', 'text', 'preview', 'snippet', 'firstPost'];
 

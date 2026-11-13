@@ -24,7 +24,7 @@ final class Works
      */
     public function describe(array $keys, ?User $actor = null): array
     {
-        $ids = ['w' => [], 'mq' => [], 'an' => []];
+        $ids = ['w' => [], 'mq' => [], 'an' => [], 'pn' => []];
         foreach (array_unique($keys) as $key) {
             if ($parsed = Marks::parse($key)) {
                 $ids[$parsed[0]][] = $parsed[1];
@@ -54,6 +54,13 @@ final class Works
         if ($ids['an'] && $this->integrations->anthology() && (! $actor || $actor->hasPermission('anthology.view'))) {
             foreach ($this->db->table('anthology_series')->whereIn('id', $ids['an'])->get(['id', 'title']) as $row) {
                 $out['an:'.$row->id] = ['title' => (string) $row->title, 'kind' => 'book', 'catalog' => null];
+            }
+        }
+
+        // A Panels series' name only for those who may browse Panels, and not once it's hidden or taken down.
+        if ($ids['pn'] && $this->integrations->panels() && (! $actor || $actor->hasPermission('panels.view'))) {
+            foreach ($this->db->table('panel_series')->whereIn('id', $ids['pn'])->where('is_hidden', false)->whereNull('removed_at')->get(['id', 'title']) as $row) {
+                $out['pn:'.$row->id] = ['title' => (string) $row->title, 'kind' => 'book', 'catalog' => null];
             }
         }
 

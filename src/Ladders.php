@@ -2,6 +2,7 @@
 
 namespace ErnestDefoe\SpoilerShield;
 
+use Carbon\Carbon;
 use Illuminate\Database\ConnectionInterface;
 
 /**
@@ -11,7 +12,8 @@ use Illuminate\Database\ConnectionInterface;
  *  - a work defined here: its steps, in order;
  *  - a Marquee show: its seasons and episode counts (Marquee's own data, from
  *    TMDB), so "S2E5" is a real episode; a film or game has one rung, finished;
- *  - an Anthology series: its chapters, read automatically.
+ *  - an Anthology series: its chapters, read automatically;
+ *  - a Panels series: its chapters out now (number × 100), read automatically.
  */
 final class Ladders
 {
@@ -63,6 +65,16 @@ final class Ladders
             return $this->db->table('anthology_series')->where('id', $id)->exists()
                 ? ['type' => 'chapters', 'chapters' => array_map('intval', $chapters)]
                 : null;
+        }
+
+        if ($source === 'pn' && $this->integrations->panels()) {
+            if (! $this->db->table('panel_series')->where('id', $id)->exists()) {
+                return null;
+            }
+            $numbers = $this->db->table('panel_chapters')->where('series_id', $id)->where('state', 'published')
+                ->whereNull('removed_at')->where('published_at', '<=', Carbon::now())->orderBy('number')->pluck('number')->all();
+
+            return ['type' => 'chapters', 'tracker' => 'panels', 'scale' => 100, 'chapters' => array_map(Marks::panelsPosition(...), $numbers)];
         }
 
         return null;

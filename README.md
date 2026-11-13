@@ -23,13 +23,14 @@ Members say where they're up to ("I'm at S2E3"). Anything further along is blurr
 
 - **[Marquee](https://github.com/ernestdefoe/marquee)**: a discussion Marquee links to an episode or a season of a show is marked there automatically. The show's seasons and episode counts are the list, so members pick a real episode.
 - **[Anthology](https://github.com/ernestdefoe/anthology)**: a series of chapter discussions is a work, and each member's place is what they've read, with nothing to set. The next unread chapter is open (you have to be able to read it); chapters after it, and replies from readers further along, are blurred.
+- **[Panels](https://github.com/ernestdefoe/panels)**: a manga or comics series is a work, and each member's place is the last chapter they finished in the reader. The next chapter out is open; later chapters' talk is blurred, and so are their titles in Panels' own chapter lists, reader and feed (scheduled chapters too).
 - **[Curio](https://github.com/ernestdefoe/curio)**: a member who marked a title finished or owned in their collection is offered **finished: unlock everything** for that work.
 
 Admins and members (with the permission) can also define their own works, and moderators can attach tags to a work so new discussions there belong to it.
 
 ## Privacy
 
-Every API response passes through one check before it leaves the server, including the forum's own page (its title, preloaded data and no-JS content), realtime pushes, notifications, search results and Anthology's chapter list. A hidden discussion keeps only its counts, dates, author and tags: its title becomes "Spoiler for S2E5 (Harbor Lights)", and any other text another extension added is removed. Open Graph, Twitter and description tags are removed from a hidden discussion's page, links that spell out a hidden title are rewritten, and a marked discussion's URL is its place ("/d/12-s2e5"), not its title. Emails that would spoil something aren't sent to that member (their alert still arrives, gated). The tests prove it byte by byte.
+Every API response passes through one check before it leaves the server, including the forum's own page (its title, preloaded data and no-JS content), realtime pushes, notifications, search results, Anthology's chapter list and Panels' chapter lists. A hidden discussion keeps only its counts, dates, author and tags: its title becomes "Spoiler for S2E5 (Harbor Lights)", and any other text another extension added is removed. Open Graph, Twitter and description tags are removed from a hidden discussion's page, links that spell out a hidden title are rewritten, and a marked discussion's URL is its place ("/d/12-s2e5"), not its title. Emails that would spoil something aren't sent to that member (their alert still arrives, gated). The tests prove it byte by byte.
 
 ## Known limits
 

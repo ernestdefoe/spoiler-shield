@@ -143,8 +143,8 @@ export default class MarkModal extends FormModal<Attrs> {
 
   search() {
     api('GET', '/works?q=' + encodeURIComponent(this.query)).then((doc) => {
-      // Anthology places its own chapters; a discussion can't be marked at one by hand.
-      this.results = doc.data.filter((r: any) => !r.work.startsWith('an:'));
+      // Anthology and Panels place their own chapters; a discussion can't be marked at one by hand.
+      this.results = doc.data.filter((r: any) => !r.work.startsWith('an:') && !r.work.startsWith('pn:'));
       m.redraw();
     });
   }

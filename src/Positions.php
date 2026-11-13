@@ -2,6 +2,7 @@
 
 namespace ErnestDefoe\SpoilerShield;
 
+use Carbon\Carbon;
 use Flarum\User\User;
 use Illuminate\Database\ConnectionInterface;
 
@@ -9,8 +10,8 @@ use Illuminate\Database\ConnectionInterface;
  * Where a member is up to, per work. Two numbers each:
  *  - read: how far they've got (replies stamped up to here are safe);
  *  - frontier: how far they may look (a discussion up to here is safe).
- * They're the same, except in an Anthology series, where the next unread
- * chapter is open (you have to be able to read it) though nobody's
+ * They're the same, except in an Anthology or Panels series, where the next
+ * unread chapter is open (you have to be able to read it) though nobody's
  * discussion of it is.
  *
  * A work missing from the answer is one the member never set.
@@ -53,15 +54,23 @@ final class Positions
             $out[(int) $row->user_id][$row->work] = ['read' => (int) $row->position, 'frontier' => (int) $row->position, 'set' => true];
         }
 
-        $series = [];
+        $series = ['an' => [], 'pn' => []];
         foreach ($works as $work) {
-            if (str_starts_with($work, 'an:')) {
-                $series[] = (int) substr($work, 3);
+            if (str_starts_with($work, 'an:') || str_starts_with($work, 'pn:')) {
+                $series[substr($work, 0, 2)][] = (int) substr($work, 3);
             }
         }
 
-        if ($series && $this->integrations->anthology()) {
-            foreach ($this->anthology($userIds, $series) as $userId => $positions) {
+        $tracked = [];
+        if ($series['an'] && $this->integrations->anthology()) {
+            $tracked[] = $this->anthology($userIds, $series['an']);
+        }
+        if ($series['pn'] && $this->integrations->panels()) {
+            $tracked[] = $this->panels($userIds, $series['pn']);
+        }
+
+        foreach ($tracked as $found) {
+            foreach ($found as $userId => $positions) {
                 foreach ($positions as $work => $position) {
                     // A member who marked the series finished stays finished.
                     if (($out[$userId][$work]['read'] ?? -1) < $position['read']) {
@@ -143,6 +152,62 @@ final class Positions
                 }
                 // Nothing read yet counts as never said (the admin's default can open it all).
                 $out[$userId]['an:'.$id] = ['read' => $got, 'frontier' => $next, 'set' => $got > 0];
+            }
+        }
+
+        return $out;
+    }
+    /**
+     * Panels keeps its own read marks (`panel_reads`, one row per finished
+     * chapter): a member's place is the highest chapter they finished, and the
+     * next chapter out after it is open. Chapters not out (scheduled, held,
+     * taken down) aren't ones anybody has to get through. Two queries for every
+     * series and member, like Anthology's.
+     *
+     * @param int[] $userIds
+     * @param int[] $series
+     * @return array<int, array<string, array{read: int, frontier: int, set?: bool}>>
+     */
+    private function panels(array $userIds, array $series): array
+    {
+        $positions = [];
+        $chapters = $this->db->table('panel_chapters')
+            ->whereIn('series_id', $series)
+            ->where('state', 'published')
+            ->whereNull('removed_at')
+            ->where('published_at', '<=', Carbon::now())
+            ->orderBy('number')
+            ->get(['series_id', 'number']);
+        foreach ($chapters as $row) {
+            $positions[(int) $row->series_id][] = Marks::panelsPosition($row->number);
+        }
+
+        $read = [];
+        $rows = $this->db->table('panel_reads')
+            ->join('panel_chapters', 'panel_chapters.id', '=', 'panel_reads.chapter_id')
+            ->whereIn('panel_reads.user_id', $userIds)
+            ->whereIn('panel_chapters.series_id', $series)
+            ->groupBy('panel_reads.user_id', 'panel_chapters.series_id')
+            ->select(['panel_reads.user_id', 'panel_chapters.series_id'])
+            // wrap(): raw SQL gets no table prefix of its own.
+            ->selectRaw('MAX('.$this->db->getQueryGrammar()->wrap('panel_chapters.number').') as number')
+            ->get();
+        foreach ($rows as $row) {
+            $read[(int) $row->user_id][(int) $row->series_id] = Marks::panelsPosition($row->number);
+        }
+
+        $out = [];
+        foreach ($userIds as $userId) {
+            foreach ($series as $id) {
+                $got = $read[$userId][$id] ?? 0;
+                $next = $got;
+                foreach ($positions[$id] ?? [] as $position) {
+                    if ($position > $got) {
+                        $next = $position;
+                        break;
+                    }
+                }
+                $out[$userId]['pn:'.$id] = ['read' => $got, 'frontier' => $next, 'set' => $got > 0];
             }
         }
 

@@ -37,6 +37,36 @@ final class MarkStore
     }
 
     /**
+     * Panels chapters in the shape of their discussions' marks (work pn:{series}, position
+     * number × 100, the uploader as author), keyed by discussion id, or by the negated
+     * chapter id for one that has no discussion yet (scheduled).
+     *
+     * @param int[] $chapterIds
+     * @return array<int, array{work: string, position: int, label: null, user: ?int, first: null, last: null, chapter: int}>
+     */
+    public function panelsChapters(array $chapterIds): array
+    {
+        $out = [];
+        if (! $chapterIds) {
+            return $out;
+        }
+
+        foreach ($this->db->table('panel_chapters')->whereIn('id', array_values(array_unique($chapterIds)))->get(['id', 'series_id', 'number', 'discussion_id', 'user_id']) as $row) {
+            $out[$row->discussion_id ? (int) $row->discussion_id : -(int) $row->id] = [
+                'work' => 'pn:'.(int) $row->series_id,
+                'position' => max(1, Marks::panelsPosition($row->number)),
+                'label' => null,
+                'user' => $row->user_id === null ? null : (int) $row->user_id,
+                'first' => null,
+                'last' => null,
+                'chapter' => (int) $row->id,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * @param int[] $ids
      * @return array<int, array{discussion: int, position: ?int, label: ?string, user: ?int, work: ?string}>
      */

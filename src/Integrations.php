@@ -21,6 +21,11 @@ final class Integrations
         return class_exists(\Ernestdefoe\Anthology\Chapter::class) && $this->extensions->isEnabled('ernestdefoe-anthology');
     }
 
+    public function panels(): bool
+    {
+        return class_exists(\ErnestDefoe\Panels\Model\Chapter::class) && $this->extensions->isEnabled('ernestdefoe-panels');
+    }
+
     public function curio(): bool
     {
         return class_exists(\Ernestdefoe\Curio\Item::class) && $this->extensions->isEnabled('ernestdefoe-curio');
@@ -32,7 +37,7 @@ final class Integrations
     }
 
     /**
-     * Whether a work's source is here: a Marquee or Anthology work whose
+     * Whether a work's source is here: a Marquee, Anthology or Panels work whose
      * extension was switched off counts as unmarked (nothing to set a place
      * in, so nothing may stay blurred for good).
      */
@@ -42,6 +47,7 @@ final class Integrations
             $work === null => false,
             str_starts_with($work, 'mq:') => $this->marquee(),
             str_starts_with($work, 'an:') => $this->anthology(),
+            str_starts_with($work, 'pn:') => $this->panels(),
             default => true,
         };
     }

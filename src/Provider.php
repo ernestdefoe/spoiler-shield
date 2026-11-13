@@ -3,6 +3,7 @@
 namespace ErnestDefoe\SpoilerShield;
 
 use ErnestDefoe\SpoilerShield\Integration\AnthologyChapters;
+use ErnestDefoe\SpoilerShield\Integration\PanelsChapters;
 use Flarum\Discussion\Discussion;
 use ErnestDefoe\SpoilerShield\Notification\GatedEmailDriver;
 use Flarum\Foundation\AbstractServiceProvider;
@@ -47,6 +48,11 @@ class Provider extends AbstractServiceProvider
         }
         if (class_exists(\Ernestdefoe\Anthology\Series::class)) {
             \Ernestdefoe\Anthology\Series::deleting(fn ($series) => AnthologyChapters::seriesDeleting($series));
+        }
+        // Panels too (its hooks check it's switched on): a chapter's discussion follows the chapter.
+        if (class_exists(\ErnestDefoe\Panels\Model\Chapter::class)) {
+            \ErnestDefoe\Panels\Model\Chapter::saved(fn ($chapter) => PanelsChapters::saved($chapter));
+            \ErnestDefoe\Panels\Model\Chapter::deleted(fn ($chapter) => PanelsChapters::deleted($chapter));
         }
     }
 }

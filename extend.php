@@ -66,7 +66,7 @@ return [
         ->post('/spoiler-shield/progress', 'spoiler-shield.progress.save', Api\ProgressController::class)
         ->get('/spoiler-shield/works', 'spoiler-shield.works', Api\WorksController::class)
         ->post('/spoiler-shield/works', 'spoiler-shield.works.create', Api\WorksController::class)
-        ->get('/spoiler-shield/works/{key:(?:w|mq|an):\d+}', 'spoiler-shield.works.show', Api\WorksController::class)
+        ->get('/spoiler-shield/works/{key:(?:w|mq|an|pn):\d+}', 'spoiler-shield.works.show', Api\WorksController::class)
         ->patch('/spoiler-shield/works/{key:\d+}', 'spoiler-shield.works.update', Api\WorksController::class)
         ->delete('/spoiler-shield/works/{key:\d+}', 'spoiler-shield.works.delete', Api\WorksController::class),
 

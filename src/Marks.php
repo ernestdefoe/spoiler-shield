@@ -4,13 +4,16 @@ namespace ErnestDefoe\SpoilerShield;
 
 /**
  * What a mark means. A work is a short key: "w:12" (defined here), "mq:345"
- * (a Marquee title) or "an:7" (an Anthology series). A position is a number
+ * (a Marquee title), "an:7" (an Anthology series) or "pn:3" (a Panels series).
+ * A position is a number
  * on that work's ladder, compared with `<=`:
  *
  *  - here: the step's place in the work's list, 1-based;
  *  - Marquee TV: season × 100000 + episode, and season × 100000 + 99999 for "the
  *    whole season" (so finishing a season reaches every episode of it);
- *  - Anthology: the chapter's position in its series.
+ *  - Anthology: the chapter's position in its series;
+ *  - Panels: the chapter's number × 100 (chapter 6.5 is 650), so an extra slotted
+ *    in later, or a chapter renumbered, never moves anyone else's marks.
  *
  * FINISHED is past everything: a member who finished the work, or a mark that
  * spoils the whole of it (a film, a game).
@@ -26,7 +29,7 @@ final class Marks
     /** @return array{0: string, 1: int}|null */
     public static function parse(mixed $key): ?array
     {
-        if (! is_string($key) || ! preg_match('/^(w|mq|an):([1-9]\d{0,9})$/', $key, $m)) {
+        if (! is_string($key) || ! preg_match('/^(w|mq|an|pn):([1-9]\d{0,9})$/', $key, $m)) {
             return null;
         }
 
@@ -47,6 +50,20 @@ final class Marks
         return $season * self::SEASON + ($episode ?: self::SEASON_END);
     }
 
+    /** A Panels chapter number ("6.5", from a decimal column) as a position: 650. */
+    public static function panelsPosition(mixed $number): int
+    {
+        return (int) round((float) $number * 100);
+    }
+
+    /** A Panels position in the chapter's own words: 650 is "6.5", 1200 is "12". */
+    public static function panelsNumber(int $position): string
+    {
+        $cents = $position % 100;
+
+        return intdiv($position, 100).($cents ? '.'.rtrim(sprintf('%02d', $cents), '0') : '');
+    }
+
     /**
      * A positioned discussion's slug, the same in every language: "s2e5",
      * "season-2", "chapter-7", or the step's name for a work defined here.
@@ -60,6 +77,7 @@ final class Marks
             $source === 'mq' && $position % self::SEASON === self::SEASON_END => 'season-'.intdiv($position, self::SEASON),
             $source === 'mq' => 's'.intdiv($position, self::SEASON).'e'.($position % self::SEASON),
             $source === 'an' => 'chapter-'.$position,
+            $source === 'pn' => 'chapter-'.str_replace('.', '-', self::panelsNumber($position)),
             default => self::slug((string) $stored),
         };
     }

@@ -28,8 +28,8 @@ final class Labels
                 : 'S'.$season.'E'.$episode;
         }
 
-        if ($source === 'an') {
-            return $this->translator->trans('ernestdefoe-spoiler-shield.lib.chapter', ['number' => $position]);
+        if ($source === 'an' || $source === 'pn') {
+            return $this->translator->trans('ernestdefoe-spoiler-shield.lib.chapter', ['number' => $source === 'pn' ? Marks::panelsNumber($position) : $position]);
         }
 
         return $stored !== null && $stored !== '' ? $stored : '#'.$position;

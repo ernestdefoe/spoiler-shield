@@ -66,7 +66,7 @@ final class MarkWriter
             $work = is_array($value) ? ($value['work'] ?? null) : null;
             $position = is_array($value) && isset($value['position']) ? (int) $value['position'] : null;
 
-            if (! Marks::parse($work) || str_starts_with((string) $work, 'an:')) {
+            if (! Marks::parse($work) || str_starts_with((string) $work, 'an:') || str_starts_with((string) $work, 'pn:')) {
                 $this->invalid('work');
             }
             if ($position !== null) {

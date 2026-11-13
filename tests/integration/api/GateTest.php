@@ -480,16 +480,17 @@ class GateTest extends TestCase
     {
         // Core's LIKE search on every database: MySQL's full-text index can't see a test's uncommitted rows.
         $this->setting('search_cjk_mode', '1');
-        // Marquee and Anthology aren't enabled here: their marks are leftovers.
+        // Marquee, Anthology and Panels aren't enabled here: their marks are leftovers.
         $this->app();
         $now = Carbon::now()->subHour();
         $this->database()->table('discussions')->insert([
             ['id' => 7, 'title' => 'Dragon episode chat', 'slug' => 's2e5', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'mq:1', 'spoiler_position' => 200005],
             ['id' => 8, 'title' => 'Chapter nine chat', 'slug' => 'chapter-9', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'an:1', 'spoiler_position' => 9],
+            ['id' => 9, 'title' => 'Manga chapter six chat', 'slug' => 'chapter-6', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'pn:1', 'spoiler_position' => 600],
         ]);
 
         $doc = $this->api('GET', '/api/discussions', null)[1];
-        foreach (['7' => 'Dragon episode chat', '8' => 'Chapter nine chat'] as $id => $title) {
+        foreach (['7' => 'Dragon episode chat', '8' => 'Chapter nine chat', '9' => 'Manga chapter six chat'] as $id => $title) {
             $item = collect($doc['data'])->firstWhere('id', $id);
             $this->assertSame($title, $item['attributes']['title']);
             $this->assertNull($item['attributes']['spoilerShield']);
