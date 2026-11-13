@@ -277,32 +277,72 @@ class IntegrationsTest extends TestCase
         $this->assertStringContainsString(self::EPISODE, $this->api('GET', '/api/discussions', 3)[2]);
     }
 
+    /**
+     * The discussion list costs the same queries for 1 or 20 hidden discussions of
+     * each kind of work, as a guest and as a member who is behind: every lookup
+     * (marks, progress, reveals, titles, Anthology chapters) is one query for the
+     * whole response. Each discussion has a reply stamped further along as its
+     * last and most relevant post, so posts are gated in the same response.
+     */
     #[Test]
-    public function the_discussion_list_costs_the_same_queries_for_3_or_30_gated_discussions(): void
+    public function the_discussion_list_costs_the_same_queries_for_1_or_20_hidden_discussions(): void
     {
         $this->app();
-        $count = function () {
-            $db = $this->database();
+        $db = $this->database();
+        $now = Carbon::now()->subHour();
+        $db->table('spoiler_works')->insert(['id' => 1, 'title' => 'The Long Road', 'kind' => 'book', 'steps' => json_encode(array_map(fn ($i) => 'Ch '.$i, range(1, 30))), 'created_at' => $now, 'updated_at' => $now]);
+        $db->table('spoiler_progress')->insert([
+            ['user_id' => 3, 'work' => 'w:1', 'position' => 1, 'updated_at' => $now],
+            ['user_id' => 3, 'work' => 'mq:1', 'position' => 100001, 'updated_at' => $now],
+        ]);
+        // Starfall's chapters one and two (Bea opened one); the seeded ones follow.
+        $db->table('anthology_chapters')->insert([
+            ['discussion_id' => 20, 'series_id' => 1, 'position' => 1, 'created_at' => $now],
+            ['discussion_id' => 21, 'series_id' => 1, 'position' => 2, 'created_at' => $now],
+        ]);
+
+        // Hidden discussions $from..$to of a work, from position 3 (S2 on Marquee): past Bea, and past chapter two (open to her).
+        $seed = function (string $work, int $base, int $from, int $to) use ($db, $now) {
+            for ($i = $from; $i <= $to; $i++) {
+                $id = $base + $i;
+                $position = $work === 'mq:1' ? 200000 + $i : $i + 2;
+                $db->table('discussions')->insert(['id' => $id, 'title' => 'Hidden '.$work.' '.$i, 'slug' => 'p'.$i, 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now,
+                    'comment_count' => 2, 'last_post_number' => 2, 'spoiler_work' => $work, 'spoiler_position' => $position, 'spoiler_label' => 'P'.$i]);
+                $db->table('posts')->insert([
+                    ['id' => $id * 10, 'discussion_id' => $id, 'number' => 1, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>Opening '.$i.'</p></t>', 'spoiler_work' => null, 'spoiler_position' => null, 'spoiler_label' => null],
+                    ['id' => $id * 10 + 1, 'discussion_id' => $id, 'number' => 2, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>Reply '.$i.'</p></t>', 'spoiler_work' => $work, 'spoiler_position' => $position + 1, 'spoiler_label' => 'P'.($i + 1)],
+                ]);
+                $db->table('discussions')->where('id', $id)->update(['first_post_id' => $id * 10, 'last_post_id' => $id * 10 + 1]);
+                if ($work === 'an:1') {
+                    $db->table('anthology_chapters')->insert(['discussion_id' => $id, 'series_id' => 1, 'position' => $position, 'created_at' => $now]);
+                }
+            }
+        };
+        $count = function (?int $as) use ($db) {
             $db->flushQueryLog();
             $db->enableQueryLog();
-            $this->api('GET', '/api/discussions', 3);
+            [$status, $body] = $this->api('GET', '/api/discussions?include=user,lastPostedUser,firstPost,lastPost,mostRelevantPost,tags&page[limit]=50', $as);
             $db->disableQueryLog();
+            $this->assertSame(200, $status);
 
-
-            return count($db->getQueryLog());
+            return [count($db->getQueryLog()), count(array_filter($body['data'], fn ($d) => (int) $d['id'] >= 1000 && ($d['attributes']['spoilerShield']['hidden'] ?? false)))];
         };
 
-        for ($i = 0; $i < 3; $i++) {
-            $this->marqueeDiscussion(100 + $i, 'Episode talk '.$i, 2, $i + 1);
-        }
-        $count(); // the first request of a session also records the visit and loads permissions
-        $few = $count();
+        foreach (['w:1' => 1000, 'mq:1' => 2000, 'an:1' => 3000] as $work => $base) {
+            $db->table('discussions')->where('id', '>=', 1000)->delete();
+            $db->table('spoiler_reveals')->delete();
+            $seed($work, $base, 1, 1);
+            foreach ([null, 3] as $as) {
+                $count($as); // the first request of a session also records the visit and loads permissions
+            }
+            $one = ['guest' => $count(null), 'member' => $count(3)];
+            $seed($work, $base, 2, 20);
+            $twenty = ['guest' => $count(null), 'member' => $count(3)];
 
-        for ($i = 3; $i < 30; $i++) {
-            $this->marqueeDiscussion(100 + $i, 'Episode talk '.$i, 2, $i % 10 + 1);
+            foreach (['guest', 'member'] as $who) {
+                $this->assertSame([1, 20], [$one[$who][1], $twenty[$who][1]], "$work, $who: every discussion is hidden");
+                $this->assertSame($one[$who][0], $twenty[$who][0], "$work, $who: {$one[$who][0]} queries for 1, {$twenty[$who][0]} for 20");
+            }
         }
-        $many = $count();
-
-        $this->assertSame($few, $many, "$few queries for 3, $many for 30");
     }
 }
