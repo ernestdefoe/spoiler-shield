@@ -3,7 +3,6 @@
 namespace ErnestDefoe\SpoilerShield\Gdpr;
 
 use Flarum\Gdpr\Data\Type;
-use Illuminate\Database\ConnectionInterface;
 
 /**
  * A member's places in each work and what they chose to reveal, in a data
@@ -30,7 +29,7 @@ class SpoilerData extends Type
 
     public function export(): ?array
     {
-        $db = resolve(ConnectionInterface::class);
+        $db = $this->user->getConnection();
 
         return [
             ['spoiler-shield/progress.json' => $this->encodeForExport($db->table('spoiler_progress')->where('user_id', $this->user->id)->get(['work', 'position', 'updated_at'])->all())],
@@ -45,7 +44,7 @@ class SpoilerData extends Type
 
     public function delete(): void
     {
-        $db = resolve(ConnectionInterface::class);
+        $db = $this->user->getConnection();
         $db->table('spoiler_progress')->where('user_id', $this->user->id)->delete();
         $db->table('spoiler_reveals')->where('user_id', $this->user->id)->delete();
         $db->table('spoiler_works')->where('user_id', $this->user->id)->update(['user_id' => null]);

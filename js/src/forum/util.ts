@@ -1,7 +1,4 @@
 import app from 'flarum/forum/app';
-import type Mithril from 'mithril';
-
-declare const m: Mithril.Static;
 
 /** What the server says about a marked discussion or post (the `spoilerShield` attribute). */
 export interface Shield {

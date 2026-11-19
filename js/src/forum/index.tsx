@@ -8,7 +8,7 @@ import type Mithril from 'mithril';
 import Veil from './components/Veil';
 import { Shield, shieldOf, t, loadChunk, openProgress } from './util';
 
-declare const m: Mithril.Static;
+export { default as extend } from './extend';
 
 /*
  * forum.js is on every page, so it only does what every page needs: drawing
@@ -28,8 +28,6 @@ const chip = (label: Mithril.Children, onclick: () => void, active: boolean) => 
 );
 
 app.initializers.add('ernestdefoe/spoiler-shield', () => {
-  app.routes['spoiler-shield'] = { path: '/spoilers', component: () => loadChunk().then(async (c) => (await c.loadCore(), c)) } as any;
-
   // ---- The discussion list --------------------------------------------------
   extend('flarum/forum/components/DiscussionListItem', 'elementAttrs', function (this: any, attrs: any) {
     if (shieldOf(this.attrs.discussion)?.hidden) attrs.className = (attrs.className || '') + ' SpoilerShield-hiddenItem';

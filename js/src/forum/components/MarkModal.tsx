@@ -7,8 +7,6 @@ import LadderPicker, { Ladder, labelFor } from './LadderPicker';
 import WorkModal from './WorkModal';
 import { api, t, Shield } from '../util';
 
-declare const m: Mithril.Static;
-
 interface Attrs extends IFormModalAttrs {
   /** Replying: the discussion's mark; only a position on its work is chosen. */
   reply?: Shield;
@@ -56,7 +54,7 @@ export default class MarkModal extends FormModal<Attrs> {
     return [
       <p className="helpText">{t('mark.reply_help', { work: shield.title })}</p>,
       <div className="Form-group">
-        <LadderPicker ladder={this.work.ladder} value={this.position} marking onchange={(v) => (this.position = v)} />
+        <LadderPicker ladder={this.work.ladder} value={this.position} marking onchange={(v: number | null) => (this.position = v)} />
       </div>,
       <div className="Form-group SpoilerShield-modal-buttons">
         <Button type="submit" className="Button Button--primary" disabled={this.position === null}>
@@ -83,7 +81,7 @@ export default class MarkModal extends FormModal<Attrs> {
         </p>,
         <p className="helpText">{t('mark.discussion_help')}</p>,
         <div className="Form-group">
-          <LadderPicker ladder={this.work.ladder} value={this.position} marking onchange={(v) => (this.position = v)} />
+          <LadderPicker ladder={this.work.ladder} value={this.position} marking onchange={(v: number | null) => (this.position = v)} />
         </div>,
         <div className="Form-group SpoilerShield-modal-buttons">
           <Button type="submit" className="Button Button--primary">

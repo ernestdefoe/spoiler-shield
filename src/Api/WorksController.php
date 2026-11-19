@@ -39,6 +39,7 @@ class WorksController implements RequestHandlerInterface
         private readonly Labels $labels,
         private readonly Positions $positions,
         private readonly Integrations $integrations,
+        private readonly MarkWriter $marks,
     ) {
     }
 
@@ -81,6 +82,7 @@ class WorksController implements RequestHandlerInterface
 
         if ($this->integrations->panels() && $actor->hasPermission('panels.view')) {
             // Panels' own scope: only series this member may browse (hidden, taken down and rating-limited ones stay out).
+            // Resolved here, not injected: Panels is optional, and its class exists only when it's installed.
             $series = \ErnestDefoe\Panels\Model\Series::query()->select(['panel_series.id', 'panel_series.title']);
             resolve(\ErnestDefoe\Panels\Access::class)->scopeSeries($series, $actor);
             foreach ($series->when($q !== '', fn ($w) => $w->whereLike('panel_series.title', $like))->orderBy('panel_series.title')->limit(10)->toBase()->get() as $row) {
@@ -198,7 +200,7 @@ class WorksController implements RequestHandlerInterface
 
         // In bulk: its replies take their discussion's place first (they stay blurred, revealable
         // one by one, rather than open to everyone at once), then the discussions are unmarked.
-        resolve(MarkWriter::class)->clearWork($key);
+        $this->marks->clearWork($key);
         $this->db->table('spoiler_progress')->where('work', $key)->delete();
         $work->delete();
 

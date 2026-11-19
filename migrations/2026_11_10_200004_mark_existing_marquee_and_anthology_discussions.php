@@ -20,10 +20,20 @@ return [
             }
         };
 
-        if ($enabled('ernestdefoe-marquee') && $schema->hasColumn('discussions', 'marquee_media_id')) {
+        // Marquee 1.21+ keeps links in marquee_discussions; older releases on `discussions`.
+        $links = match (true) {
+            ! $enabled('ernestdefoe-marquee') => null,
+            $schema->hasTable('marquee_discussions') => $db->table('discussions')
+                ->join('marquee_discussions', 'marquee_discussions.discussion_id', '=', 'discussions.id')
+                ->select(['discussions.id', 'marquee_discussions.media_id as marquee_media_id', 'marquee_discussions.season as marquee_season', 'marquee_discussions.episode as marquee_episode']),
+            $schema->hasColumn('discussions', 'marquee_media_id') => $db->table('discussions')->whereNotNull('marquee_media_id')
+                ->select(['id', 'marquee_media_id', 'marquee_season', 'marquee_episode']),
+            default => null,
+        };
+
+        if ($links) {
             // chunkById: the filter (spoiler_work null) changes as rows are filled, which makes chunk() skip pages.
-            $db->table('discussions')->whereNotNull('marquee_media_id')->whereNull('spoiler_work')
-                ->select(['id', 'marquee_media_id', 'marquee_season', 'marquee_episode'])
+            $links->whereNull('discussions.spoiler_work')
                 ->chunkById(500, function ($rows) use ($db) {
                     foreach ($rows as $row) {
                         $position = Marks::marqueePosition($row->marquee_season ? (int) $row->marquee_season : null, $row->marquee_episode ? (int) $row->marquee_episode : null);
@@ -35,7 +45,7 @@ return [
                             'slug' => $episode === Marks::SEASON_END ? 'season-'.intdiv($position, Marks::SEASON) : Marks::slug('S'.intdiv($position, Marks::SEASON).'E'.$episode),
                         ]));
                     }
-                });
+                }, 'discussions.id', 'id');
         }
 
         if ($enabled('ernestdefoe-anthology') && $schema->hasTable('anthology_chapters')) {

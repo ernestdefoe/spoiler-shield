@@ -6,8 +6,6 @@ import type Mithril from 'mithril';
 import LadderPicker, { FINISHED, Ladder } from './LadderPicker';
 import { api, t, refreshAfterProgress } from '../util';
 
-declare const m: Mithril.Static;
-
 interface Attrs extends IFormModalAttrs {
   work: string;
 }
@@ -46,7 +44,7 @@ export default class ProgressModal extends FormModal<Attrs> {
           {this.value === FINISHED ? (
             <p className="SpoilerShield-finished">{t('progress.finished_now')}</p>
           ) : (
-            <LadderPicker ladder={ladder} value={this.value} onchange={(v) => (this.value = v)} />
+            <LadderPicker ladder={ladder} value={this.value} onchange={(v: number | null) => (this.value = v)} />
           )}
         </div>
         <div className="Form-group SpoilerShield-modal-buttons">

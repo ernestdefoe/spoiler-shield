@@ -9,10 +9,6 @@ import ProgressModal from './ProgressModal';
 import WorkModal from './WorkModal';
 import { api, t } from '../util';
 
-declare const m: Mithril.Static;
-
-declare const flarum: any;
-
 let PageStructure: any;
 let IndexSidebar: any;
 

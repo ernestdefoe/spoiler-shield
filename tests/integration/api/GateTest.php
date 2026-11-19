@@ -4,6 +4,7 @@ namespace ErnestDefoe\SpoilerShield\Tests\integration\api;
 
 use Carbon\Carbon;
 use ErnestDefoe\SpoilerShield\Marks;
+use ErnestDefoe\SpoilerShield\Search\HiddenFromSearch;
 use Flarum\Discussion\Discussion;
 use Flarum\Extend;
 use Flarum\Frontend\Document;
@@ -236,6 +237,38 @@ class GateTest extends TestCase
         (require __DIR__.'/../../../migrations/2026_11_10_200005_add_spoiler_work_to_posts.php')['up']($db->getSchemaBuilder());
 
         $this->assertSame(0, $db->table('posts')->whereNotNull('spoiler_position')->whereNull('spoiler_work')->count());
+    }
+
+    #[Test]
+    public function the_marquee_widening_migration_runs_both_ways(): void
+    {
+        $this->app();
+        $db = $this->database();
+        $now = Carbon::now()->subHour();
+        $db->table('discussions')->insert([
+            ['id' => 50, 'title' => 'S2E5', 'slug' => 's2e5', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'mq:1', 'spoiler_position' => 2005],
+            ['id' => 51, 'title' => 'Season 3', 'slug' => 'season-3', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'spoiler_work' => 'mq:1', 'spoiler_position' => 3999],
+        ]);
+        $db->table('posts')->insert(['id' => 50, 'discussion_id' => 50, 'number' => 1, 'user_id' => 4, 'type' => 'comment', 'created_at' => $now, 'content' => '<t><p>x</p></t>', 'spoiler_work' => 'mq:1', 'spoiler_position' => 2007]);
+        $db->table('spoiler_progress')->insert([
+            ['user_id' => 3, 'work' => 'mq:1', 'position' => 1002, 'updated_at' => $now],
+            ['user_id' => 4, 'work' => 'mq:1', 'position' => Marks::FINISHED, 'updated_at' => $now],
+        ]);
+        $places = fn () => [
+            $db->table('discussions')->whereIn('id', [50, 51])->orderBy('id')->pluck('spoiler_position')->map(fn ($p) => (int) $p)->all(),
+            (int) $db->table('posts')->where('id', 50)->value('spoiler_position'),
+            $db->table('spoiler_progress')->where('work', 'mq:1')->orderBy('user_id')->pluck('position')->map(fn ($p) => (int) $p)->all(),
+            (int) $db->table('discussions')->where('id', 1)->value('spoiler_position'),
+        ];
+        $migration = require __DIR__.'/../../../migrations/2026_11_10_200006_widen_marquee_positions.php';
+
+        $migration['up']($db->getSchemaBuilder());
+        $this->assertSame([[200005, 399999], 200007, [100002, Marks::FINISHED], 4], $places());
+
+        // An episode the old numbering can't hold comes back as the season's last one it can.
+        $db->table('posts')->where('id', 50)->update(['spoiler_position' => 201200]);
+        $migration['down']($db->getSchemaBuilder());
+        $this->assertSame([[2005, 3999], 2998, [1002, Marks::FINISHED], 4], $places());
     }
 
     #[Test]
@@ -506,6 +539,7 @@ class GateTest extends TestCase
     #[Test]
     public function realtimes_public_push_carries_no_text_of_marked_items(): void
     {
+        $this->extension('flarum-realtime');
         $generator = $this->app()->getContainer()->make(\Flarum\Realtime\Push\Payload\Generator::class);
 
         $public = $generator(Post::query()->find(3));
@@ -520,6 +554,7 @@ class GateTest extends TestCase
     #[Test]
     public function realtimes_public_push_carries_no_text_from_a_work_even_with_guests_on_show(): void
     {
+        $this->extension('flarum-realtime');
         $this->setting('ernestdefoe-spoiler-shield.guests', 'show');
         $generator = $this->app()->getContainer()->make(\Flarum\Realtime\Push\Payload\Generator::class);
 
@@ -629,6 +664,25 @@ class GateTest extends TestCase
         $posts = fn (?int $as) => array_column($this->api('GET', '/api/posts', $as, [], ['filter' => ['q' => 'final chapter']])[1]['data'] ?? [], 'id');
         $this->assertNotContains('3', $posts(3));
         $this->assertContains('3', $posts(4));
+    }
+
+    #[Test]
+    public function the_search_window_is_one_instance_open_only_while_a_search_runs(): void
+    {
+        $this->setting('search_cjk_mode', '1');
+        $this->api('GET', '/api/discussions', 3, [], ['filter' => ['q' => 'Kael']]);
+
+        $container = $this->app()->getContainer();
+        $search = $container->make(HiddenFromSearch::class);
+        $this->assertSame($search, $container->make(HiddenFromSearch::class));
+
+        // After the search, nothing of it is left: the plain list has the discussion (as a veil).
+        $this->assertContains('1', array_column($this->api('GET', '/api/discussions', 3)[1]['data'], 'id'));
+
+        $bea = User::query()->find(3);
+        $visible = fn () => array_map('intval', Discussion::query()->whereVisibleTo($bea)->pluck('id')->all());
+        $this->assertNotContains(1, $search->during($bea, null, $visible));
+        $this->assertContains(1, $visible());
     }
 
     #[Test]

@@ -117,6 +117,7 @@ class ScrubDocument
         $furthest = $this->db->table('posts')->where('discussion_id', $id)->whereNotNull('spoiler_position')
             ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', (int) $actor->id))
             ->groupBy('spoiler_work')
+            // The builder has no grouped MAX; wrap() gives the raw SQL its table prefix and quoting.
             ->selectRaw($g->wrap('spoiler_work').' as work, max('.$g->wrap('spoiler_position').') as furthest')
             ->get();
 

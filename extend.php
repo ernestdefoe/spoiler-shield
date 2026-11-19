@@ -19,17 +19,17 @@
 
 use ErnestDefoe\SpoilerShield\Api;
 use ErnestDefoe\SpoilerShield\Http\RedactApi;
+use ErnestDefoe\SpoilerShield\Integration;
 use ErnestDefoe\SpoilerShield\Http\ScrubDocument;
 use ErnestDefoe\SpoilerShield\MarkWriter;
 use ErnestDefoe\SpoilerShield\Provider;
 use ErnestDefoe\SpoilerShield\Search\HiddenFromSearch;
-use Flarum\Api\Context;
 use Flarum\Api\Resource\DiscussionResource;
 use Flarum\Api\Resource\ForumResource;
 use Flarum\Api\Resource\PostResource;
-use Flarum\Api\Schema;
 use Flarum\Discussion\Discussion;
 use Flarum\Discussion\Event\Saving as DiscussionSaving;
+use Flarum\Discussion\UserState;
 use Flarum\Extend;
 use Flarum\Post\Event\Saving as PostSaving;
 use Flarum\Post\Post;
@@ -71,19 +71,13 @@ return [
         ->delete('/spoiler-shield/works/{key:\d+}', 'spoiler-shield.works.delete', Api\WorksController::class),
 
     (new Extend\ApiResource(DiscussionResource::class))
-        ->fields(fn () => Api\MarkFields::discussion()),
+        ->fields(Api\DiscussionMarkFields::class),
 
     (new Extend\ApiResource(PostResource::class))
-        ->fields(fn () => Api\MarkFields::post()),
+        ->fields(Api\PostMarkFields::class),
 
-    // The viewer's own permissions: already loaded, so no query.
     (new Extend\ApiResource(ForumResource::class))
-        ->fields(fn () => [
-            Schema\Boolean::make('spoilerShieldCanCreateWorks')
-                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('spoiler-shield.createWorks')),
-            Schema\Boolean::make('spoilerShieldCanManageWorks')
-                ->get(fn ($forum, Context $context) => $context->getActor()->hasPermission('spoiler-shield.manageWorks')),
-        ]),
+        ->fields(Api\ForumFields::class),
 
     (new Extend\Event())
         ->listen(DiscussionSaving::class, [MarkWriter::class, 'discussionSaving'])
@@ -99,6 +93,23 @@ return [
         ])
         ->whenExtensionEnabled('flarum-tags', fn () => [
             (new Extend\Event())->listen(DiscussionWasTagged::class, fn (DiscussionWasTagged $event) => resolve(MarkWriter::class)->retagged($event->discussion)),
+        ])
+        ->whenExtensionEnabled('flarum-realtime', fn () => [
+            (new Extend\ServiceProvider())->register(Integration\RealtimeProvider::class),
+        ])
+        // An Anthology chapter's discussion follows the chapter (Anthology saves chapters as models).
+        ->whenExtensionEnabled('ernestdefoe-anthology', fn () => [
+            (new Extend\Event())
+                ->listen('eloquent.saved: '.\Ernestdefoe\Anthology\Chapter::class, fn ($chapter) => Integration\AnthologyChapters::saved($chapter))
+                ->listen('eloquent.deleted: '.\Ernestdefoe\Anthology\Chapter::class, fn ($chapter) => Integration\AnthologyChapters::deleted($chapter))
+                ->listen('eloquent.deleting: '.\Ernestdefoe\Anthology\Series::class, fn ($series) => Integration\AnthologyChapters::seriesDeleting($series))
+                ->listen('eloquent.saving: '.UserState::class, fn (UserState $state) => Integration\AnthologyChapters::reading($state)),
+        ])
+        // A Panels chapter's discussion follows the chapter too.
+        ->whenExtensionEnabled('ernestdefoe-panels', fn () => [
+            (new Extend\Event())
+                ->listen('eloquent.saved: '.\ErnestDefoe\Panels\Model\Chapter::class, fn ($chapter) => Integration\PanelsChapters::saved($chapter))
+                ->listen('eloquent.deleted: '.\ErnestDefoe\Panels\Model\Chapter::class, fn ($chapter) => Integration\PanelsChapters::deleted($chapter)),
         ]),
 
     // String literals, not class constants: extend.php runs at boot, and a class

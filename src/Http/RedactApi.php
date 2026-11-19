@@ -28,6 +28,7 @@ class RedactApi implements MiddlewareInterface
         private readonly Redactor $redactor,
         private readonly Integrations $integrations,
         private readonly LoggerInterface $log,
+        private readonly HiddenFromSearch $search,
     ) {
     }
 
@@ -35,7 +36,7 @@ class RedactApi implements MiddlewareInterface
     {
         // A word search leaves out, inside the query, what the searcher may not read.
         $response = $this->searching($request)
-            ? HiddenFromSearch::during(RequestUtil::getActor($request), $request->getAttribute('session'), fn () => $handler->handle($request))
+            ? $this->search->during(RequestUtil::getActor($request), $request->getAttribute('session'), fn () => $handler->handle($request))
             : $handler->handle($request);
 
         if (! str_contains($response->getHeaderLine('Content-Type'), 'json')) {

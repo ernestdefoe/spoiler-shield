@@ -5,8 +5,6 @@ import classList from 'flarum/common/utils/classList';
 import type Mithril from 'mithril';
 import { Shield, t, reveal, openProgress, finish } from '../util';
 
-declare const m: Mithril.Static;
-
 interface VeilAttrs {
   shield: Shield;
   type: 'discussions' | 'posts';

@@ -85,12 +85,55 @@ class IntegrationsTest extends TestCase
         $discussion->title = $title;
         $discussion->user_id = 4;
         $discussion->created_at = $discussion->last_posted_at = Carbon::now()->subHour();
-        $discussion->setAttribute('marquee_media_id', 1);
-        $discussion->setAttribute('marquee_season', $season);
-        $discussion->setAttribute('marquee_episode', $episode);
-        $discussion->save();
+        $this->relink($discussion, 1, $season, $episode);
 
         return $discussion;
+    }
+
+    /**
+     * Save a discussion with a changed Marquee link, as the installed Marquee
+     * does: 1.21+ holds the link as the loaded relation while the discussion
+     * saves and writes it after; older releases set columns on the discussion.
+     */
+    private function relink(Discussion $discussion, ?int $media, ?int $season, ?int $episode): void
+    {
+        if (! class_exists(\Ernestdefoe\Marquee\Link::class)) {
+            $discussion->setAttribute('marquee_media_id', $media);
+            $discussion->setAttribute('marquee_season', $season);
+            $discussion->setAttribute('marquee_episode', $episode);
+            $discussion->save();
+
+            return;
+        }
+
+        $link = ($discussion->exists ? \Ernestdefoe\Marquee\Link::query()->find($discussion->id) : null) ?? new \Ernestdefoe\Marquee\Link();
+        $link->forceFill(['media_id' => $media, 'season' => $season, 'episode' => $episode]);
+        $discussion->setRelation('marqueeLink', $link);
+        $discussion->save();
+        $link->persist($discussion);
+    }
+
+    #[Test]
+    public function linking_through_marquees_own_api_marks_the_discussion(): void
+    {
+        $then = Carbon::now()->subHour();
+        $this->setting('ernestdefoe-marquee.tmdb_token', 'test-token');
+        $this->prepareDatabase([
+            'marquee_seasons' => [['id' => 1, 'media_id' => 1, 'number' => 2, 'fetched_at' => $then, 'data' => json_encode(['number' => 2, 'episodes' => []])]],
+            Discussion::class => [['id' => 30, 'title' => 'Harbor talk', 'slug' => 'harbor-talk', 'user_id' => 1, 'created_at' => $then, 'last_posted_at' => $then, 'comment_count' => 1]],
+        ]);
+
+        $link = fn (?array $marquee) => $this->send($this->request('PATCH', '/api/discussions/30', [
+            'authenticatedAs' => 1,
+            'json' => ['data' => ['type' => 'discussions', 'id' => '30', 'attributes' => ['marquee' => $marquee]]],
+        ]))->getStatusCode();
+
+        $this->assertSame(200, $link(['kind' => 'tv', 'id' => '1399', 'season' => 2, 'episode' => 5]));
+        $discussion = Discussion::query()->find(30);
+        $this->assertSame(['mq:1', 200005], [$discussion->spoiler_work, (int) $discussion->spoiler_position]);
+
+        $this->assertSame(200, $link(null));
+        $this->assertNull(Discussion::query()->find(30)->spoiler_work);
     }
 
     #[Test]
@@ -123,15 +166,12 @@ class IntegrationsTest extends TestCase
 
         // Relinked to an earlier episode in Marquee: a reply without a stamp keeps S2E5.
         $this->database()->table('posts')->insert(['id' => 90, 'discussion_id' => 10, 'number' => 2, 'user_id' => 4, 'type' => 'comment', 'created_at' => Carbon::now()->subHour(), 'content' => '<t><p>The harbor burns</p></t>']);
-        $episode->setAttribute('marquee_episode', 1);
-        $episode->save();
+        $this->relink($episode, 1, 2, 1);
         $this->assertSame(['mq:1', 200005], [Post::query()->find(90)->spoiler_work, (int) Post::query()->find(90)->spoiler_position]);
-        $episode->setAttribute('marquee_episode', 5);
-        $episode->save();
+        $this->relink($episode, 1, 2, 5);
 
         // Unlinked in Marquee: the mark goes, and the title comes back to the slug.
-        $episode->setAttribute('marquee_media_id', null);
-        $episode->save();
+        $this->relink($episode, null, null, null);
         $this->assertNull($episode->fresh()->spoiler_work);
         $this->assertSame('the-dragon-burns-the-harbor-city', $episode->fresh()->slug);
         $this->assertNotNull($early->fresh()->spoiler_work);
@@ -171,7 +211,12 @@ class IntegrationsTest extends TestCase
         $db = $this->database();
         $now = Carbon::now()->subHour();
         foreach (array_chunk(range(1001, 2200), 300) as $ids) {
-            $db->table('discussions')->insert(array_map(fn ($id) => ['id' => $id, 'title' => 'T'.$id, 'slug' => 't', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1, 'marquee_media_id' => 1, 'marquee_season' => 1, 'marquee_episode' => 2], $ids));
+            $links = class_exists(\Ernestdefoe\Marquee\Link::class);
+            $db->table('discussions')->insert(array_map(fn ($id) => ['id' => $id, 'title' => 'T'.$id, 'slug' => 't', 'user_id' => 4, 'created_at' => $now, 'last_posted_at' => $now, 'comment_count' => 1]
+                + ($links ? [] : ['marquee_media_id' => 1, 'marquee_season' => 1, 'marquee_episode' => 2]), $ids));
+            if ($links) {
+                $db->table('marquee_discussions')->insert(array_map(fn ($id) => ['discussion_id' => $id, 'media_id' => 1, 'season' => 1, 'episode' => 2], $ids));
+            }
         }
 
         (require __DIR__.'/../../../migrations/2026_11_10_200004_mark_existing_marquee_and_anthology_discussions.php')['up']($db->getSchemaBuilder());

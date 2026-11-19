@@ -2,6 +2,7 @@
 
 namespace ErnestDefoe\SpoilerShield;
 
+use Ernestdefoe\Marquee\Link;
 use Flarum\Discussion\Discussion;
 use Flarum\Discussion\Event\Saving as DiscussionSaving;
 use Flarum\Foundation\ValidationException;
@@ -111,15 +112,14 @@ final class MarkWriter
      */
     public function discussionModelSaving(Discussion $discussion): void
     {
-        if (! isset($this->explicit[$discussion])
-            && $this->integrations->marquee()
-            && $discussion->isDirty(['marquee_media_id', 'marquee_season', 'marquee_episode'])
-            && ($discussion->spoiler_work === null || str_starts_with((string) $discussion->spoiler_work, 'mq:'))) {
-            $media = $discussion->getAttribute('marquee_media_id');
+        $change = ! isset($this->explicit[$discussion]) && $this->integrations->marquee() ? self::marqueeChange($discussion) : null;
+
+        if ($change && ($discussion->spoiler_work === null || str_starts_with((string) $discussion->spoiler_work, 'mq:'))) {
+            [$media, $season, $episode] = $change;
 
             if ($media) {
                 $discussion->spoiler_work = 'mq:'.(int) $media;
-                $discussion->spoiler_position = Marks::marqueePosition($discussion->getAttribute('marquee_season'), $discussion->getAttribute('marquee_episode'));
+                $discussion->spoiler_position = Marks::marqueePosition($season, $episode);
             } else {
                 $discussion->spoiler_work = $discussion->spoiler_position = null;
             }
@@ -128,6 +128,28 @@ final class MarkWriter
 
         $this->keepRepliesGated($discussion);
         $this->slug($discussion);
+    }
+
+    /**
+     * The Marquee link this save changes: [title id or null once unlinked,
+     * season, episode], or null when it is unchanged. Marquee 1.21+ holds a
+     * changed link as the discussion's loaded `marqueeLink` while it saves;
+     * 1.20 and older set columns on the discussion (only until a forum
+     * updates Marquee: 1.21 refuses older Spoiler Shield releases).
+     *
+     * @return array{0: int|null, 1: int|null, 2: int|null}|null
+     */
+    private static function marqueeChange(Discussion $discussion): ?array
+    {
+        if (! class_exists(Link::class)) {
+            return $discussion->isDirty(['marquee_media_id', 'marquee_season', 'marquee_episode'])
+                ? [$discussion->getAttribute('marquee_media_id'), $discussion->getAttribute('marquee_season'), $discussion->getAttribute('marquee_episode')]
+                : null;
+        }
+
+        $link = $discussion->relationLoaded('marqueeLink') ? $discussion->getRelation('marqueeLink') : null;
+
+        return $link instanceof Link && $link->isDirty(['media_id', 'season', 'episode']) ? [$link->media_id, $link->season, $link->episode] : null;
     }
 
     /**

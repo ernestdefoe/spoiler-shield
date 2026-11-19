@@ -4,8 +4,6 @@ import Button from 'flarum/common/components/Button';
 import type Mithril from 'mithril';
 import { api, t } from '../util';
 
-declare const m: Mithril.Static;
-
 interface Attrs extends IFormModalAttrs {
   /** Editing: the work as GET /works/{key} returns it. */
   work?: any;

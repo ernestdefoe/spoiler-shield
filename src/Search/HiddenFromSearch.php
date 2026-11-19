@@ -19,15 +19,18 @@ use Illuminate\Database\ConnectionInterface;
  *
  * The same rules as the Gate, in SQL: a mark at or before your place, your
  * own, revealed, or a work whose default for you is "show".
+ *
+ * One per container (Provider binds it as a singleton): the search window is
+ * this instance's state, opened and closed by during().
  */
 final class HiddenFromSearch
 {
-    private static ?User $actor = null;
+    private ?User $actor = null;
 
-    private static ?Session $session = null;
+    private ?Session $session = null;
 
     /** @var array<string, mixed>|null this search's rules, worked out once */
-    private static ?array $rules = null;
+    private ?array $rules = null;
 
     public function __construct(
         private readonly ConnectionInterface $db,
@@ -37,26 +40,26 @@ final class HiddenFromSearch
     ) {
     }
 
-    public static function during(User $actor, ?Session $session, callable $run): mixed
+    public function during(User $actor, ?Session $session, callable $run): mixed
     {
-        [$before, $beforeSession] = [self::$actor, self::$session];
-        self::$actor = $actor;
-        self::$session = $session;
-        self::$rules = null;
+        [$before, $beforeSession] = [$this->actor, $this->session];
+        $this->actor = $actor;
+        $this->session = $session;
+        $this->rules = null;
 
         try {
             return $run();
         } finally {
-            self::$actor = $before;
-            self::$session = $beforeSession;
-            self::$rules = null;
+            $this->actor = $before;
+            $this->session = $beforeSession;
+            $this->rules = null;
         }
     }
 
     /** @param \Illuminate\Database\Eloquent\Builder<\Flarum\Discussion\Discussion> $query */
     public function discussions(User $actor, $query): void
     {
-        if (self::$actor && (int) self::$actor->id === (int) $actor->id) {
+        if ($this->actor && (int) $this->actor->id === (int) $actor->id) {
             $this->readable($query->getQuery(), $actor);
         }
     }
@@ -64,7 +67,7 @@ final class HiddenFromSearch
     /** @param \Illuminate\Database\Eloquent\Builder<\Flarum\Post\Post> $query */
     public function posts(User $actor, $query): void
     {
-        if (! self::$actor || (int) self::$actor->id !== (int) $actor->id) {
+        if (! $this->actor || (int) $this->actor->id !== (int) $actor->id) {
             return;
         }
 
@@ -130,8 +133,8 @@ final class HiddenFromSearch
      */
     private function rules(User $actor): array
     {
-        if (self::$rules !== null && self::$rules['actor'] === (int) $actor->id) {
-            return self::$rules['value'];
+        if ($this->rules !== null && $this->rules['actor'] === (int) $actor->id) {
+            return $this->rules['value'];
         }
 
         $works = array_values(array_unique(array_merge(
@@ -158,7 +161,7 @@ final class HiddenFromSearch
 
         $revealedD = $revealedP = [];
         if ($actor->isGuest()) {
-            foreach ((array) self::$session?->get(Gate::SESSION_KEY, []) as $item) {
+            foreach ((array) $this->session?->get(Gate::SESSION_KEY, []) as $item) {
                 if (is_string($item) && preg_match('/^([dp]):(\d+)$/', $item, $m)) {
                     $m[1] === 'd' ? $revealedD[] = (int) $m[2] : $revealedP[] = (int) $m[2];
                 }
@@ -170,7 +173,7 @@ final class HiddenFromSearch
         }
 
         $value = compact('open', 'limits', 'revealedD', 'revealedP', 'unsetShow');
-        self::$rules = ['actor' => (int) $actor->id, 'value' => $value];
+        $this->rules = ['actor' => (int) $actor->id, 'value' => $value];
 
         return $value;
     }
